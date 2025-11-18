@@ -5,7 +5,7 @@ import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
 import './App.css'
 
-const API_BASE = 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('voice') // voice, image, camera, chat
