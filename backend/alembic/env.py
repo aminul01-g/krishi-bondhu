@@ -29,6 +29,9 @@ def get_url():
         url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
     elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    # Convert aiosqlite to sqlite for Alembic (Alembic uses sync driver)
+    elif url.startswith("sqlite+aiosqlite://"):
+        url = url.replace("sqlite+aiosqlite://", "sqlite://")
     return url
 
 def run_migrations_offline():
