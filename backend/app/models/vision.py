@@ -3,7 +3,13 @@ YOLOv8-based demo inference. Uses ultralytics.YOLO.
 This is an integration demo; you should replace with a domain-specific classifier for crop diseases.
 """
 import os
-import torch
+
+# Make torch optional since it's only needed for vision model loading
+try:
+    import torch
+except ImportError:
+    print("Warning: torch not installed. Vision features will be disabled.")
+    torch = None
 
 # Try to import ultralytics, but make it optional
 try:

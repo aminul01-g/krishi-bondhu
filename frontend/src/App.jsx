@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import Recorder from './components/Recorder'
+import CameraCapture from './components/CameraCapture'
+import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
 import './App.css'
 
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = 'http://localhost:8001/api'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('voice')
+  const [activeTab, setActiveTab] = useState('voice') // voice, image, camera, chat
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -40,7 +42,9 @@ export default function App() {
   }
 
   const tabs = [
-  { id: 'voice', label: '🎤 Voice', icon: '🎤' }
+  { id: 'voice', label: '🎤 Voice', icon: '🎤' },
+  { id: 'camera', label: '📹 Camera', icon: '📹' },
+  { id: 'chat', label: '💬 Chat', icon: '💬' }
   ]
 
   return (
@@ -48,7 +52,7 @@ export default function App() {
       <header className="app-header">
         <div className="header-content">
           <h1>🌾 KrishiBondhu</h1>
-          <p className="subtitle">Your intelligent farming assistant - Ask questions in Bengali or English!</p>
+          <p className="subtitle">Your intelligent farming assistant - Ask questions, share images, or chat anytime!</p>
         </div>
       </header>
 
@@ -80,6 +84,30 @@ export default function App() {
                       farming advice, or weather conditions.
                     </p>
                     <Recorder onConversationComplete={handleNewConversation} />
+                  </>
+                )}
+
+                {/* Image tab removed to avoid duplicate upload option while using chat */}
+
+                {activeTab === 'camera' && (
+                  <>
+                    <h2>📹 Live Camera</h2>
+                    <p className="section-description">
+                      Use your device camera to capture and analyze crop problems in real-time. 
+                      Perfect for on-field diagnosis.
+                    </p>
+                    <CameraCapture onCaptureComplete={handleNewConversation} />
+                  </>
+                )}
+
+                {activeTab === 'chat' && (
+                  <>
+                    <h2>💬 Chat Assistant</h2>
+                    <p className="section-description">
+                      Chat with our AI assistant anytime. Ask questions, get advice, or attach 
+                      images for analysis. Available 24/7!
+                    </p>
+                    <Chatbot onMessageComplete={handleNewConversation} />
                   </>
                 )}
               </div>
