@@ -7,21 +7,37 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/farmdb")
+# Use SQLite for development if PostgreSQL is not available
+database_url = os.getenv("DATABASE_URL")
+if not database_url or "postgresql" in database_url:
+    # Try to use SQLite in-memory or file-based as fallback
+    database_url = "sqlite+aiosqlite:///:memory:"
+    print("[INFO] Using SQLite in-memory database for development")
 
-# Create engine with connection pool settings that handle failures gracefully
-engine = create_async_engine(
-    DATABASE_URL, 
-    future=True, 
-    echo=False,
-    pool_pre_ping=True,  # Verify connections before using them
-    pool_recycle=3600,    # Recycle connections after 1 hour
-    connect_args={
-        "server_settings": {
-            "application_name": "farmassist"
+DATABASE_URL = database_url
+
+# Create engine with appropriate settings based on database type
+if "sqlite" in DATABASE_URL:
+    engine = create_async_engine(
+        DATABASE_URL,
+        future=True,
+        echo=False,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    # PostgreSQL connection
+    engine = create_async_engine(
+        DATABASE_URL, 
+        future=True, 
+        echo=False,
+        pool_pre_ping=True,  # Verify connections before using them
+        pool_recycle=3600,    # Recycle connections after 1 hour
+        connect_args={
+            "server_settings": {
+                "application_name": "farmassist"
+            }
         }
-    }
-)
+    )
 AsyncSessionLocal = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 # Dependency for FastAPI endpoints if needed

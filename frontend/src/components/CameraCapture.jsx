@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = 'http://localhost:8001/api'
 
 export default function CameraCapture({ onCaptureComplete }) {
   const [stream, setStream] = useState(null)
@@ -371,4 +371,3 @@ export default function CameraCapture({ onCaptureComplete }) {
     </div>
   )
 }
-

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = 'http://localhost:8001/api'
 
 export default function ConversationHistory({ conversations, loading, onDelete }) {
   const [deletingId, setDeletingId] = useState(null)
@@ -179,7 +179,7 @@ export default function ConversationHistory({ conversations, loading, onDelete }
               <div className="item-content">
                 <audio 
                   controls 
-                  src={`http://localhost:8000/api/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
+                  src={`http://localhost:8001/api/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
                   className="audio-player"
                 />
               </div>
@@ -190,4 +190,3 @@ export default function ConversationHistory({ conversations, loading, onDelete }
     </div>
   )
 }
-

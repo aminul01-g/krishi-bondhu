@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const API_BASE = 'http://localhost:8000/api'
+const API_BASE = 'http://localhost:8001/api'
 
 export default function Chatbot({ onMessageComplete }) {
   const [messages, setMessages] = useState([
@@ -352,4 +352,3 @@ export default function Chatbot({ onMessageComplete }) {
     </div>
   )
 }
-

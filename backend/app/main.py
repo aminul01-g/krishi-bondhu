@@ -76,6 +76,165 @@ async def upload_audio(
             "user_id": user_id
         }, status_code=500)
 
+@app.post('/api/upload_image')
+async def upload_image(
+    image: UploadFile = File(...),
+    user_id: str = Form(...),
+    lat: float = Form(None),
+    lon: float = Form(None),
+    question: str = Form("")
+):
+    """
+    Upload image for analysis. Can include optional text question.
+    """
+    # Import language detection function
+    from app.farm_agent.langgraph_app import detect_language_from_text
+    
+    image_path = await save_image_local(image)
+    
+    # CRITICAL: Detect language from question if provided
+    detected_language = "en"
+    if question:
+        detected_language = detect_language_from_text(question)
+        print(f"[DEBUG] /api/upload_image: Question language detected: {detected_language}")
+    
+    initial_state = {
+        "audio_path": None,
+        "user_id": user_id,
+        "gps": {"lat": lat, "lon": lon},
+        "image_path": image_path,
+        "transcript": question,  # Use question as transcript if provided
+        "language": detected_language,  # SET LANGUAGE HERE!
+        "messages": []
+    }
+    try:
+        # Skip STT if no audio, go directly to intent/vision
+        # We'll modify the flow to handle image-only queries
+        result = await langgraph_app.ainvoke(initial_state)
+        # Ensure we always have a reply_text
+        if not result.get("reply_text"):
+            result["reply_text"] = "I analyzed your image but couldn't generate a detailed response. Please try again."
+        
+        # Clean up non-serializable objects for JSON response
+        clean_result = {
+            "transcript": result.get("transcript", question),
+            "reply_text": result.get("reply_text", ""),
+            "crop": result.get("crop"),
+            "language": result.get("language"),
+            "vision_result": result.get("vision_result"),
+            "weather_forecast": result.get("weather_forecast"),
+            "tts_path": result.get("tts_path"),
+            "user_id": result.get("user_id", user_id),
+            "gps": result.get("gps", {"lat": lat, "lon": lon})
+        }
+        return JSONResponse(clean_result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Return a helpful error response instead of crashing
+        return JSONResponse({
+            "error": str(e),
+            "reply_text": "I apologize, but I'm experiencing technical difficulties processing your image. Please try again in a moment.",
+            "transcript": question,
+            "user_id": user_id
+        }, status_code=500)
+
+@app.post('/api/chat')
+async def chat(
+    message: str = Form(...),
+    user_id: str = Form(...),
+    lat: float = Form(None),
+    lon: float = Form(None),
+    image: UploadFile = File(None),
+    include_history: bool = Form(True),  # NEW: Option to include chat history
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Text-based chatbot endpoint. Can include optional image and chat history.
+    """
+    # Import language detection function
+    from app.farm_agent.langgraph_app import detect_language_from_text
+    from sqlalchemy import select, desc
+    from app.models.db_models import Conversation
+    
+    image_path = None
+    if image:
+        image_path = await save_image_local(image)
+    
+    # CRITICAL: Detect language from message BEFORE passing to workflow
+    detected_language = detect_language_from_text(message)
+    print(f"[DEBUG] /api/chat: Message language detected: {detected_language}")
+    
+    # NEW: Load chat history for context (last 5 conversations)
+    messages = [{"role": "user", "content": message}]
+    if include_history and db:
+        try:
+            # Query previous conversations for this user
+            result = await db.execute(
+                select(Conversation)
+                .where(Conversation.user_id == user_id)
+                .order_by(desc(Conversation.created_at))
+                .limit(5)  # Get last 5 conversations
+            )
+            previous_convs = result.scalars().all()
+            
+            # Reverse to get chronological order (oldest to newest)
+            previous_convs = list(reversed(previous_convs))
+            
+            # Add to messages in conversational format
+            for conv in previous_convs:
+                if conv.transcript:
+                    messages.insert(0, {"role": "user", "content": conv.transcript})
+                if conv.meta_data and conv.meta_data.get("reply_text"):
+                    messages.insert(1, {"role": "assistant", "content": conv.meta_data.get("reply_text", "")})
+            
+            print(f"[DEBUG] /api/chat: Loaded {len(previous_convs)} previous conversations for user {user_id}")
+        except Exception as e:
+            print(f"[DEBUG] /api/chat: Could not load history: {e}")
+            # Continue without history if database fails
+            pass
+    
+    initial_state = {
+        "audio_path": None,
+        "user_id": user_id,
+        "gps": {"lat": lat, "lon": lon},
+        "image_path": image_path,
+        "transcript": message,  # Use message as transcript
+        "language": detected_language,  # SET LANGUAGE HERE!
+        "messages": messages  # Now includes history if available
+    }
+    try:
+        # For text-only chat, skip STT and go to reasoning
+        result = await langgraph_app.ainvoke(initial_state)
+        # Ensure we always have a reply_text
+        if not result.get("reply_text"):
+            result["reply_text"] = "I received your message but couldn't generate a response. Please try again."
+        
+        # Clean up non-serializable objects for JSON response
+        clean_result = {
+            "transcript": result.get("transcript", ""),
+            "reply_text": result.get("reply_text", ""),
+            "crop": result.get("crop"),
+            "language": result.get("language"),
+            "vision_result": result.get("vision_result"),
+            "weather_forecast": result.get("weather_forecast"),
+            "tts_path": result.get("tts_path"),
+            "user_id": result.get("user_id", user_id),
+            "gps": result.get("gps", {"lat": lat, "lon": lon})
+        }
+        return JSONResponse(clean_result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Return a helpful error response instead of crashing
+        error_msg = str(e)
+        return JSONResponse({
+            "error": error_msg,
+            "reply_text": "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
+            "transcript": message,
+            "user_id": user_id
+        }, status_code=500)
+
 
 @app.get('/api/get_tts')
 async def get_tts(path: str):
