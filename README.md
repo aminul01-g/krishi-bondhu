@@ -21,7 +21,7 @@
 
 ---
 
-## 🎯 Project Overview
+## Project Overview
 
 **KrishiBondhu** is an intelligent, voice-enabled agricultural assistant designed to empower Bangladeshi farmers with real-time crop advisory and disease diagnosis. The system bridges the digital divide by supporting voice interaction in both Bengali and English, making advanced agricultural guidance accessible to all farmers regardless of literacy level.
 
@@ -39,39 +39,39 @@ Enable farmers to make data-driven decisions about crop cultivation, disease man
 
 ---
 
-## ✨ Core Features
+##  Core Features
 
-### 1. **Voice-Enabled Interface** 🎤
+### 1. **Voice-Enabled Interface** 
 - **Multilingual Support**: Bengali (বাংলা) and English
 - **Speech-to-Text (STT)**: Real-time audio transcription using Google Gemini API
 - **Text-to-Speech (TTS)**: Natural-sounding responses using gTTS
 - **Accent Recognition**: Optimized for Bangladeshi Bengali dialect
 
-### 2. **Computer Vision Analysis** 📸
+### 2. **Computer Vision Analysis** 
 - **Crop Disease Detection**: YOLOv8-based vision model for identifying diseases, pests, and deficiencies
 - **Image Upload Support**: Direct image analysis for crop health assessment
 - **Confidence Scoring**: Quantified analysis results for diagnostic accuracy
 - **Multi-format Support**: JPG, PNG, WEBP image formats
 
-### 3. **Intelligent Agricultural Advisory** 🤖
+### 3. **Intelligent Agricultural Advisory** 
 - **Context-Aware Responses**: LangGraph-based workflow for comprehensive analysis
 - **Crop Database**: Recognition of 50+ crop types (rice, tomato, potato, wheat, etc.)
 - **Disease & Pest Library**: Extensive knowledge base for common agricultural problems
 - **Personalized Recommendations**: Tailored solutions based on crop, location, and season
 
-### 4. **Real-Time Weather Integration** 🌤️
+### 4. **Real-Time Weather Integration** 
 - **Location-Based Forecasting**: GPS-integrated weather data via Open-Meteo API
 - **Agricultural Alerts**: Weather-based farming recommendations
 - **Humidity & Temperature Monitoring**: Critical for disease prediction
 - **Precipitation Data**: Irrigation and pest management insights
 
-### 5. **Conversation History Management** 📚
+### 5. **Conversation History Management** 
 - **Persistent Storage**: PostgreSQL-backed conversation history
 - **Metadata Tracking**: Crop type, location, language, and analysis results
 - **Quick Reference**: Access previous farming queries and solutions
 - **User Profiles**: Personalized farmer profiles and activity tracking
 
-### 6. **Multi-Modal Input Support** 🖼️
+### 6. **Multi-Modal Input Support** 
 - **Audio Input**: Voice queries in Bengali or English
 - **Image Input**: Crop photos for disease diagnosis
 - **Text Input**: Written queries via chat interface
@@ -79,7 +79,7 @@ Enable farmers to make data-driven decisions about crop cultivation, disease man
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Backend
 | Component | Technology | Purpose |
@@ -119,7 +119,7 @@ Enable farmers to make data-driven decisions about crop cultivation, disease man
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 ### System Architecture Diagram
 
@@ -213,7 +213,7 @@ CREATE TABLE conversations (
 
 ---
 
-## 📦 Installation Guide
+##  Installation Guide
 
 ### Prerequisites
 
@@ -328,7 +328,7 @@ Frontend will be available at: **http://localhost:5173**
 
 ---
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Running All Services (Docker Compose)
 
@@ -366,14 +366,14 @@ docker compose up postgres
 ### First Test
 
 1. Open http://localhost:5173 in browser
-2. Click "🎤 Voice" tab
+2. Click " Voice" tab
 3. Click "Start Recording"
 4. Speak: *"My rice crop has yellow leaves"* (or Bengali equivalent)
 5. Wait for processing and response
 
 ---
 
-## 📡 API Documentation
+##  API Documentation
 
 ### Core Endpoints
 
@@ -462,7 +462,7 @@ Remove specific conversation from history.
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 KrishiBondhu/
@@ -520,7 +520,7 @@ KrishiBondhu/
 
 ---
 
-## 👨‍💻 Development Guide
+##  Development Guide
 
 ### Adding New Crops
 
@@ -579,7 +579,7 @@ pytest --cov=app tests/
 
 ---
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Common Issues
 
@@ -641,7 +641,7 @@ pip install --upgrade ultralytics
 
 ---
 
-## 📊 Performance Metrics
+##  Performance Metrics
 
 ### Expected Response Times
 
@@ -663,7 +663,7 @@ pip install --upgrade ultralytics
 
 ---
 
-## 🌐 Deployment
+##  Deployment
 
 ### Docker Deployment
 
@@ -684,7 +684,7 @@ Refer to `DEPLOYMENT.md` for cloud-specific instructions.
 
 ---
 
-## 🤝 Contributing
+##  Contributing
 
 ### Development Workflow
 
@@ -719,7 +719,7 @@ This project is licensed under the [LICENSE](./LICENSE) file.
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - **Google Gemini API**: LLM and vision capabilities
 - **Ultralytics YOLOv8**: Object detection framework
