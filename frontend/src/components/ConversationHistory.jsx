@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function ConversationHistory({ conversations, loading, onDelete }) {
   const [deletingId, setDeletingId] = useState(null)
@@ -39,10 +39,6 @@ export default function ConversationHistory({ conversations, loading, onDelete }
   }
 
   const handleDelete = async (conversationId) => {
-    if (!window.confirm('Are you sure you want to delete this conversation?')) {
-      return
-    }
-
     setDeletingId(conversationId)
     try {
       const response = await fetch(`${API_BASE}/conversations/${conversationId}`, {
@@ -85,7 +81,7 @@ export default function ConversationHistory({ conversations, loading, onDelete }
                 onClick={() => handleDelete(conv.id)}
                 disabled={deletingId === conv.id}
                 className="delete-btn"
-                title="Delete conversation"
+                title="Click to delete this conversation"
               >
                 {deletingId === conv.id ? '⏳' : '🗑️'}
               </button>
@@ -96,6 +92,13 @@ export default function ConversationHistory({ conversations, loading, onDelete }
             <div className="conversation-item">
               <div className="item-label">👤 Your Question:</div>
               <div className="item-content">{conv.transcript}</div>
+            </div>
+          )}
+
+          {conv.metadata && conv.metadata.reply_text && (
+            <div className="conversation-item highlight">
+              <div className="item-label">🤖 AI Response:</div>
+              <div className="item-content">{conv.metadata.reply_text}</div>
             </div>
           )}
 
@@ -161,9 +164,9 @@ export default function ConversationHistory({ conversations, loading, onDelete }
             <div className="conversation-item">
               <div className="item-label">🖼️ Image:</div>
               <div className="item-content">
-                <a 
-                  href={conv.media_url} 
-                  target="_blank" 
+                <a
+                  href={conv.media_url}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="media-link"
                 >
@@ -177,9 +180,9 @@ export default function ConversationHistory({ conversations, loading, onDelete }
             <div className="conversation-item">
               <div className="item-label">🔊 Audio Response:</div>
               <div className="item-content">
-                <audio 
-                  controls 
-                  src={`http://localhost:8001/api/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
+                <audio
+                  controls
+                  src={`http://localhost:8000/api/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
                   className="audio-player"
                 />
               </div>

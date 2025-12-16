@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function CameraCapture({ onCaptureComplete }) {
   const [stream, setStream] = useState(null)
@@ -162,12 +162,12 @@ export default function CameraCapture({ onCaptureComplete }) {
         }
         throw new Error(data.error || `HTTP ${resp.status}: ${data.reply_text || 'Server error'}`)
       }
-      
+
       // Check if there's an error in the response (but still show reply_text if available)
       if (data.error && !data.reply_text) {
         throw new Error(data.error)
       }
-      
+
       setResponse(data)
 
       // Play TTS if available
@@ -338,7 +338,7 @@ export default function CameraCapture({ onCaptureComplete }) {
       {response && (
         <div className="response-display">
           <h3>Analysis Result</h3>
-          
+
           {response.reply_text && (
             <div className="response-item">
               <strong>AI Response:</strong>

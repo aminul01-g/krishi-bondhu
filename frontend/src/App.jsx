@@ -5,7 +5,7 @@ import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('voice') // voice, image, camera, chat
@@ -42,9 +42,9 @@ export default function App() {
   }
 
   const tabs = [
-  { id: 'voice', label: '🎤 Voice', icon: '🎤' },
-  { id: 'camera', label: '📹 Camera', icon: '📹' },
-  { id: 'chat', label: '💬 Chat', icon: '💬' }
+    { id: 'voice', label: '🎤 Voice', icon: '🎤' },
+    { id: 'camera', label: '📹 Camera', icon: '📹' },
+    { id: 'chat', label: '💬 Chat', icon: '💬' }
   ]
 
   return (
@@ -80,7 +80,7 @@ export default function App() {
                   <>
                     <h2>🎤 Voice Assistant</h2>
                     <p className="section-description">
-                      Record your voice question in Bengali or English. Ask about crop diseases, 
+                      Record your voice question in Bengali or English. Ask about crop diseases,
                       farming advice, or weather conditions.
                     </p>
                     <Recorder onConversationComplete={handleNewConversation} />
@@ -93,7 +93,7 @@ export default function App() {
                   <>
                     <h2>📹 Live Camera</h2>
                     <p className="section-description">
-                      Use your device camera to capture and analyze crop problems in real-time. 
+                      Use your device camera to capture and analyze crop problems in real-time.
                       Perfect for on-field diagnosis.
                     </p>
                     <CameraCapture onCaptureComplete={handleNewConversation} />
@@ -104,7 +104,7 @@ export default function App() {
                   <>
                     <h2>💬 Chat Assistant</h2>
                     <p className="section-description">
-                      Chat with our AI assistant anytime. Ask questions, get advice, or attach 
+                      Chat with our AI assistant anytime. Ask questions, get advice, or attach
                       images for analysis. Available 24/7!
                     </p>
                     <Chatbot onMessageComplete={handleNewConversation} />
@@ -118,8 +118,8 @@ export default function App() {
               <div className="card">
                 <div className="section-header">
                   <h2>📋 History</h2>
-                  <button 
-                    onClick={fetchConversations} 
+                  <button
+                    onClick={fetchConversations}
                     className="refresh-btn"
                     disabled={loading}
                     title="Refresh conversations"
@@ -132,8 +132,8 @@ export default function App() {
                     ⚠️ {error}
                   </div>
                 )}
-                <ConversationHistory 
-                  conversations={conversations} 
+                <ConversationHistory
+                  conversations={conversations}
                   loading={loading}
                   onDelete={fetchConversations}
                 />

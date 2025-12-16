@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function Chatbot({ onMessageComplete }) {
   const [messages, setMessages] = useState([
@@ -23,6 +23,12 @@ export default function Chatbot({ onMessageComplete }) {
 
   useEffect(() => {
     getCurrentLocation()
+    // Initialize or retrieve user_id
+    let storedUserId = localStorage.getItem('krishi_user_id')
+    if (!storedUserId) {
+      storedUserId = `farmer_${Date.now()}`
+      localStorage.setItem('krishi_user_id', storedUserId)
+    }
   }, [])
 
   useEffect(() => {
@@ -53,7 +59,8 @@ export default function Chatbot({ onMessageComplete }) {
         console.error('GPS error:', err)
         setGpsStatus('error')
         setGps({ lat: 23.7, lon: 90.4 })
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
 
@@ -88,7 +95,8 @@ export default function Chatbot({ onMessageComplete }) {
       fd.append('image', selectedImage)
     }
     fd.append('message', userMessage)
-    fd.append('user_id', `farmer_${Date.now()}`)
+    const userId = localStorage.getItem('krishi_user_id') || `farmer_${Date.now()}`
+    fd.append('user_id', userId)
     if (gps.lat && gps.lon) {
       fd.append('lat', gps.lat)
       fd.append('lon', gps.lon)
@@ -111,8 +119,8 @@ export default function Chatbot({ onMessageComplete }) {
       if (!resp.ok) {
         // If we have a reply_text in error response, use it
         if (data.reply_text) {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
+          setMessages(prev => [...prev, {
+            role: 'assistant',
             content: data.reply_text,
             metadata: data.metadata || {}
           }])
@@ -121,16 +129,16 @@ export default function Chatbot({ onMessageComplete }) {
         }
         throw new Error(data.error || `HTTP ${resp.status}: ${data.reply_text || 'Server error'}`)
       }
-      
+
       // Check if there's an error in the response
       if (data.error && !data.reply_text) {
         throw new Error(data.error)
       }
-      
+
       const assistantMessage = data.reply_text || 'I received your message, but could not generate a response.'
 
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
+      setMessages(prev => [...prev, {
+        role: 'assistant',
         content: assistantMessage,
         metadata: {
           crop: data.crop,
@@ -182,7 +190,7 @@ export default function Chatbot({ onMessageComplete }) {
     } catch (err) {
       console.error('Chat error:', err)
       let errorMessage = 'An unknown error occurred. Please try again.'
-      
+
       if (err.message) {
         errorMessage = err.message
         // Check for network errors
@@ -190,7 +198,7 @@ export default function Chatbot({ onMessageComplete }) {
           errorMessage = 'Unable to connect to the server. Please check your internet connection and ensure the backend is running.'
         }
       }
-      
+
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: `Sorry, I encountered an error: ${errorMessage}. Please try again in a moment.`

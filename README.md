@@ -1,734 +1,319 @@
-# 🌾 KrishiBondhu - AI-Powered Farmer Assistant
+# KrishiBondhu - AI-Powered Agricultural Assistant 🌾
 
-> **A Voice-Enabled Intelligent Agricultural Assistant for Bangladeshi Farmers**
+An intelligent agricultural assistant designed specifically for farmers in Bangladesh, providing real-time crop advice, disease diagnosis, and farming guidance in both Bengali and English through voice, text, and image inputs.
 
----
+## 🚀 Features
 
-## Table of Contents
+### Core Capabilities
+- **Multi-Modal Input**: Voice recording, text chat, and image upload
+- **Bilingual Support**: Seamless Bengali and English language detection
+- **Vision Analysis**: AI-powered crop disease identification from images
+- **Voice Interaction**: Speech-to-text and text-to-speech for hands-free operation
+- **Weather Integration**: Location-based weather data for farming decisions
+- **Conversation History**: Persistent chat history across sessions
 
-- [Project Overview](#project-overview)
-- [Core Features](#core-features)
-- [Technology Stack](#technology-stack)
-- [Architecture](#architecture)
-- [Installation Guide](#installation-guide)
-- [Quick Start](#quick-start)
-- [API Documentation](#api-documentation)
-- [Project Structure](#project-structure)
-- [Development Guide](#development-guide)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+### Technical Features
+- **Progressive Web App (PWA)**: Installable on mobile/desktop with offline capabilities
+- **Multi-LLM Support**: Switch between Google Gemini and Hugging Face models
+- **Real-time GPS**: Automatic location detection for localized advice
+- **Responsive UI**: Mobile-first design optimized for field use
+- **Docker Deployment**: Containerized for easy setup and scaling
 
----
-
-## Project Overview
-
-**KrishiBondhu** is an intelligent, voice-enabled agricultural assistant designed to empower Bangladeshi farmers with real-time crop advisory and disease diagnosis. The system bridges the digital divide by supporting voice interaction in both Bengali and English, making advanced agricultural guidance accessible to all farmers regardless of literacy level.
-
-### Vision
-To revolutionize agricultural practices in Bangladesh by leveraging cutting-edge AI technology to provide instant, personalized farming guidance directly to farmers' fingertips.
-
-### Mission
-Enable farmers to make data-driven decisions about crop cultivation, disease management, pest control, and weather-based farming through a voice-interactive AI assistant.
-
-### Target Users
-- Smallholder farmers in rural Bangladesh
-- Agricultural extension workers
-- Agribusiness professionals
-- Educational institutions
-
----
-
-##  Core Features
-
-### 1. **Voice-Enabled Interface** 
-- **Multilingual Support**: Bengali (বাংলা) and English
-- **Speech-to-Text (STT)**: Real-time audio transcription using Google Gemini API
-- **Text-to-Speech (TTS)**: Natural-sounding responses using gTTS
-- **Accent Recognition**: Optimized for Bangladeshi Bengali dialect
-
-### 2. **Computer Vision Analysis** 
-- **Crop Disease Detection**: YOLOv8-based vision model for identifying diseases, pests, and deficiencies
-- **Image Upload Support**: Direct image analysis for crop health assessment
-- **Confidence Scoring**: Quantified analysis results for diagnostic accuracy
-- **Multi-format Support**: JPG, PNG, WEBP image formats
-
-### 3. **Intelligent Agricultural Advisory** 
-- **Context-Aware Responses**: LangGraph-based workflow for comprehensive analysis
-- **Crop Database**: Recognition of 50+ crop types (rice, tomato, potato, wheat, etc.)
-- **Disease & Pest Library**: Extensive knowledge base for common agricultural problems
-- **Personalized Recommendations**: Tailored solutions based on crop, location, and season
-
-### 4. **Real-Time Weather Integration** 
-- **Location-Based Forecasting**: GPS-integrated weather data via Open-Meteo API
-- **Agricultural Alerts**: Weather-based farming recommendations
-- **Humidity & Temperature Monitoring**: Critical for disease prediction
-- **Precipitation Data**: Irrigation and pest management insights
-
-### 5. **Conversation History Management** 
-- **Persistent Storage**: PostgreSQL-backed conversation history
-- **Metadata Tracking**: Crop type, location, language, and analysis results
-- **Quick Reference**: Access previous farming queries and solutions
-- **User Profiles**: Personalized farmer profiles and activity tracking
-
-### 6. **Multi-Modal Input Support** 
-- **Audio Input**: Voice queries in Bengali or English
-- **Image Input**: Crop photos for disease diagnosis
-- **Text Input**: Written queries via chat interface
-- **Camera Capture**: Real-time camera feed analysis (Progressive Web App)
-
----
-
-## Technology Stack
-
-### Backend
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | FastAPI 0.104.1 | REST API development |
-| **Async Runtime** | Uvicorn 0.24.0 | ASGI server |
-| **Database** | PostgreSQL 15+ | Conversation persistence |
-| **ORM** | SQLAlchemy 2.0 | Async database operations |
-| **Workflow Engine** | LangGraph 0.0.38 | Multi-node processing pipeline |
-| **LLM** | Google Gemini 2.5 Flash | NLP & multimodal AI |
-| **Speech** | Google Cloud Speech / gTTS | STT & TTS services |
-| **Computer Vision** | YOLOv8 / Ultralytics | Object detection |
-| **Image Processing** | Pillow, OpenCV | Image manipulation |
-| **API Client** | Requests 2.31 | HTTP requests |
+## 🛠️ Tech Stack
 
 ### Frontend
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | React 18.2.0 | UI framework |
-| **Build Tool** | Vite 5.1.0 | Fast module bundler |
-| **Styling** | CSS3 | Responsive design |
-| **APIs** | Fetch API | HTTP client |
-| **PWA** | Service Workers | Progressive Web App support |
+- **Framework**: React 18 + Vite
+- **PWA**: Vite PWA Plugin with service workers
+- **Styling**: Modern CSS with responsive design
+- **API Communication**: Fetch API with FormData
+
+### Backend
+- **Framework**: FastAPI (Python)
+- **Workflow Engine**: LangGraph for multi-step reasoning
+- **Database**: PostgreSQL with AsyncPG
+- **ORM**: SQLAlchemy 2.0 (Async)
+- **Migrations**: Alembic
+
+### AI Services
+- **LLM Providers**:
+  - Google Gemini API (gemini-2.5-flash)
+  - Hugging Face Inference API (meta-llama/Llama-3.2-3B-Instruct)
+- **Speech-to-Text**: Google Gemini Audio API
+- **Text-to-Speech**: Google TTS (gTTS)
+- **Vision**: Google Gemini Vision API
 
 ### Infrastructure
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Containerization** | Docker & Docker Compose | Service orchestration |
-| **Database Service** | PostgreSQL Container | Managed database |
-| **Web Server** | Uvicorn + FastAPI | Production API server |
+- **Container**: Docker + Docker Compose
+- **Reverse Proxy**: Nginx-ready configuration
+- **Deployment**: Supports cloud and on-premise
 
-### External Services
-- **Google Gemini API**: Advanced LLM capabilities
-- **Open-Meteo API**: Weather forecasting (free, no API key)
-- **Google Cloud Speech**: Speech recognition
-- **gTTS**: Text-to-speech conversion
+## 📋 Prerequisites
 
----
+- Docker & Docker Compose (recommended)
+- OR Python 3.11+, Node.js 18+, PostgreSQL 15+
+- API Keys:
+  - Google Gemini API key (free tier available)
+  - Hugging Face API key (optional, free tier available)
 
-##  Architecture
+## 🚀 Quick Start
 
-### System Architecture Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend (React PWA)                    │
-│  ┌──────────────┬──────────────┬──────────────┐             │
-│  │ Voice Input  │ Image Upload │ Chat/Text    │             │
-│  └──────────────┴──────────────┴──────────────┘             │
-│                          │                                    │
-└──────────────────────────┼────────────────────────────────────┘
-                           │ HTTP/REST
-┌──────────────────────────┼────────────────────────────────────┐
-│              FastAPI Backend (Python)                         │
-│                                                               │
-│  ┌─────────────────────────────────────────────────┐        │
-│  │  API Routes (/api/upload_audio, /api/conversations)│     │
-│  └─────────────────────────────────────────────────┘        │
-│                        │                                      │
-│  ┌─────────────────────────────────────────────────┐        │
-│  │     LangGraph Workflow Engine (Async)           │        │
-│  │  ┌─────────────────────────────────────────┐    │        │
-│  │  │ START → STT → INTENT → VISION → WEATHER │    │        │
-│  │  │           ↓                              │    │        │
-│  │  │        REASONING → TTS → DATABASE → END │    │        │
-│  │  └─────────────────────────────────────────┘    │        │
-│  └─────────────────────────────────────────────────┘        │
-│                        │                                      │
-│   ┌────────────────────┼────────────────────┐               │
-│   │                    │                    │               │
-└───┼────────────────────┼────────────────────┼───────────────┘
-    │                    │                    │
-    ▼                    ▼                    ▼
-┌─────────────┐  ┌──────────────┐  ┌──────────────────┐
-│ PostgreSQL  │  │ Google Gemini│  │ Open-Meteo API   │
-│ Database    │  │ LLM + Vision │  │ Weather Service  │
-└─────────────┘  └──────────────┘  └──────────────────┘
+### 1. Clone Repository
+```bash
+git clone <repository-url>
+cd krishi-bondhu
 ```
 
-### LangGraph Workflow Pipeline
-
-```
-INPUT (Audio/Image/Text)
-    │
-    ├──► STT Node: Speech-to-Text
-    │    └─► Gemini Transcription + Language Detection
-    │
-    ├──► INTENT Node: Extract Crop & Symptoms
-    │    └─► JSON parsing (crop, symptoms, need_image)
-    │
-    ├──► VISION Node: Image Analysis (if image provided)
-    │    └─► YOLOv8 disease detection + Gemini multimodal
-    │
-    ├──► WEATHER Node: Fetch Location-Based Weather
-    │    └─► Open-Meteo API + GPS coordinates
-    │
-    ├──► REASONING Node: Generate Expert Advice
-    │    └─► Gemini LLM with agricultural system prompt
-    │
-    ├──► TTS Node: Convert Response to Audio
-    │    └─► gTTS audio generation (Bengali/English)
-    │
-    ├──► DATABASE Node: Persist Conversation
-    │    └─► PostgreSQL storage with metadata
-    │
-    └──► OUTPUT (Text + Audio + Metadata)
-```
-
-### Database Schema
-
-```sql
--- Users Table
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    external_id VARCHAR(255) UNIQUE,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Conversations Table
-CREATE TABLE conversations (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    transcript TEXT,
-    tts_path VARCHAR(255),
-    media_url VARCHAR(255),
-    confidence FLOAT,
-    meta_data JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
-
----
-
-##  Installation Guide
-
-### Prerequisites
-
-- **Python**: 3.9+ (3.11 recommended)
-- **Node.js**: 16+ with npm
-- **Docker**: 20.10+ and Docker Compose
-- **Git**: Latest version
-- **PostgreSQL**: 13+ (via Docker)
-- **API Keys**: Google Gemini API key
-- **Disk Space**: 2GB+ (includes ML models)
-- **RAM**: 4GB minimum, 8GB recommended
-
-### Step 1: Clone Repository
+### 2. Configure Environment
+Create a `.env` file in the root directory:
 
 ```bash
-cd /home/aminul/Documents/p
-git clone <repository-url> KrishiBondhu
-cd KrishiBondhu
-```
+# LLM Configuration
+LLM_PROVIDER=huggingface          # or 'gemini'
+GEMINI_API_KEY=your_gemini_key_here
+HUGGINGFACE_API_KEY=your_hf_key_here
+HUGGINGFACE_MODEL=meta-llama/Llama-3.2-3B-Instruct
 
-### Step 2: Setup Backend
-
-#### 2.1 Create Virtual Environment
-
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-#### 2.2 Install Dependencies
-
-```bash
-pip install -r requirements-all.txt
-```
-
-#### 2.3 Configure Environment Variables
-
-Create `.env` file in `backend/` directory:
-
-```env
 # Database
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/farmdb
-UPLOAD_DIR=/tmp/uploads
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/farmdb
 
-# Google Gemini API
-GEMINI_API_KEY=your_google_gemini_api_key_here
+# Services
+STT_PROVIDER=gemini
+TTS_PROVIDER=gtts
 
-# Optional: Other LLM providers (if using)
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-
-# Server
-HOST=0.0.0.0
-PORT=8000
+# Application
 DEBUG=true
+LOG_LEVEL=INFO
 ```
 
-#### 2.4 Setup Database
-
+### 3. Start with Docker (Recommended)
 ```bash
-# Start PostgreSQL via Docker
-docker compose up -d postgres
-
-# Wait 10 seconds for PostgreSQL to initialize
-sleep 10
-
-# Run migrations
-alembic upgrade head
-```
-
-#### 2.5 Start Backend Server
-
-```bash
-# In backend directory with venv activated
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-Backend will be available at: **http://localhost:8000**
-API docs: **http://localhost:8000/docs**
-
-### Step 3: Setup Frontend
-
-#### 3.1 Install Dependencies
-
-```bash
-cd frontend
-npm install
-```
-
-#### 3.2 Configure API Endpoint
-
-Check `frontend/src/App.jsx` - ensure API_BASE points to your backend:
-
-```javascript
-const API_BASE = 'http://localhost:8000/api'
-```
-
-#### 3.3 Start Frontend Development Server
-
-```bash
-npm run dev
-```
-
-Frontend will be available at: **http://localhost:5173**
-
-### Step 4: Verify Installation
-
-1. **Backend Health**: Visit http://localhost:8000/docs
-2. **Frontend Access**: Visit http://localhost:5173
-3. **Database**: Check PostgreSQL connection
-
----
-
-##  Quick Start
-
-### Running All Services (Docker Compose)
-
-```bash
-cd backend
 docker compose up -d
 ```
 
-This starts:
-- PostgreSQL database (port 5432)
-- Backend API (port 8000)
-- Frontend (port 5173)
+The application will be available at:
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
-### Manual Service Startup
+### 4. First-Time Setup
 
-**Terminal 1 - Backend:**
+**Database Migration:**
 ```bash
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+docker compose exec backend alembic upgrade head
 ```
 
-**Terminal 2 - Frontend:**
+**Verify Services:**
+```bash
+# Check all containers are running
+docker compose ps
+
+# View backend logs
+docker compose logs -f backend
+```
+
+## 🔧 Configuration
+
+### Switching LLM Providers
+
+To switch between Gemini and Hugging Face:
+
+1. Edit `.env`:
+```bash
+# For Hugging Face (Free, no rate limits)
+LLM_PROVIDER=huggingface
+
+# For Gemini (Faster, better quality)
+LLM_PROVIDER=gemini
+```
+
+2. Restart backend:
+```bash
+docker compose restart backend
+```
+
+### Available Models
+
+**Hugging Face (Recommended for free tier):**
+- `meta-llama/Llama-3.2-3B-Instruct` (default, fast & reliable)
+- Other models available on HF Serverless Inference
+
+**Google Gemini:**
+- `models/gemini-2.5-flash` (default)
+- Rate limit: 20 requests/day on free tier
+
+## 📱 Usage
+
+### Web Interface
+1. Open http://localhost:5173 in your browser
+2. Grant microphone and location permissions when prompted
+3. Choose interaction method:
+   - **Voice Tab**: Record voice questions
+   - **Chat Tab**: Type questions or view conversation history
+   - **Vision Tab**: Upload crop/disease images
+
+### Install as PWA
+1. Click the install icon in your browser's address bar
+2. Or use browser menu: "Install KrishiBondhu"
+3. Launch from your home screen like a native app
+
+### API Endpoints
+
+**Chat:**
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -F "message=What is the best fertilizer for rice?" \
+  -F "user_id=farmer_123"
+```
+
+**Image Analysis:**
+```bash
+curl -X POST http://localhost:8000/api/upload_image \
+  -F "image=@/path/to/crop.jpg" \
+  -F "question=What disease is this?" \
+  -F "user_id=farmer_123"
+```
+
+**Voice Upload:**
+```bash
+curl -X POST http://localhost:8000/api/upload_audio \
+  -F "file=@/path/to/recording.webm" \
+  -F "user_id=farmer_123"
+```
+
+## 🏗️ Development
+
+### Local Development (Without Docker)
+
+**Backend:**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements-lock.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+**Frontend:**
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-**Terminal 3 - Database:**
+**Database:**
+```bash
+# Start PostgreSQL locally or use Docker:
+docker run -d -p 5432:5432 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=farmdb \
+  postgres:15
+```
+
+### Run Migrations
 ```bash
 cd backend
-docker compose up postgres
+alembic upgrade head
 ```
 
-### First Test
-
-1. Open http://localhost:5173 in browser
-2. Click " Voice" tab
-3. Click "Start Recording"
-4. Speak: *"My rice crop has yellow leaves"* (or Bengali equivalent)
-5. Wait for processing and response
-
----
-
-##  API Documentation
-
-### Core Endpoints
-
-#### 1. Upload Audio & Process
-
-**POST** `/api/upload_audio`
-
-Process voice query and return agricultural advice.
-
-**Request:**
+### Create New Migration
 ```bash
-curl -X POST http://localhost:8000/api/upload_audio \
-  -F "file=@voice_query.webm" \
-  -F "user_id=farmer_001" \
-  -F "lat=23.7" \
-  -F "lon=90.4" \
-  -F "image=@crop_photo.jpg"  # Optional
+cd backend
+alembic revision --autogenerate -m "description"
+alembic upgrade head
 ```
 
-**Response:**
-```json
-{
-  "transcript": "My rice crop has yellow leaves",
-  "reply_text": "Yellow leaves in rice often indicate nitrogen deficiency...",
-  "crop": "rice",
-  "language": "en",
-  "vision_result": {
-    "disease": "leaf_spot",
-    "confidence": 0.87
-  },
-  "weather_forecast": {
-    "temperature": 28.5,
-    "humidity": 72,
-    "precipitation": 0
-  },
-  "tts_path": "/tmp/uploads/audio_response.mp3",
-  "user_id": "farmer_001",
-  "gps": { "lat": 23.7, "lon": 90.4 }
-}
-```
-
-#### 2. Upload Image for Analysis
-
-**POST** `/api/upload_image`
-
-Analyze crop image for diseases and pests.
-
-**Request:**
-```bash
-curl -X POST http://localhost:8000/api/upload_image \
-  -F "image=@crop_disease.jpg" \
-  -F "user_id=farmer_001" \
-  -F "lat=23.7" \
-  -F "lon=90.4" \
-  -F "question=What disease is this?"
-```
-
-#### 3. Fetch Conversation History
-
-**GET** `/api/conversations`
-
-Retrieve all previous farmer conversations.
-
-**Response:**
-```json
-[
-  {
-    "id": 1,
-    "user_id": 1,
-    "transcript": "How to grow tomatoes?",
-    "confidence": 0.92,
-    "metadata": {
-      "crop": "tomato",
-      "language": "en"
-    },
-    "created_at": "2024-11-17T10:30:00"
-  }
-]
-```
-
-#### 4. Delete Conversation
-
-**DELETE** `/api/conversations/{conversation_id}`
-
-Remove specific conversation from history.
-
----
-
-##  Project Structure
+## 📁 Project Structure
 
 ```
-KrishiBondhu/
+krishi-bondhu/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py                 # FastAPI app entry point
-│   │   ├── db.py                   # Database configuration
-│   │   ├── storage.py              # File storage utilities
-│   │   ├── api/
-│   │   │   ├── routes.py           # REST endpoints
-│   │   │   ├── utils.py            # Helper functions
-│   │   │   └── __init__.py
-│   │   ├── models/
-│   │   │   ├── db_models.py        # SQLAlchemy models
-│   │   │   ├── vision.py           # YOLOv8 vision model
-│   │   │   └── __init__.py
-│   │   ├── farm_agent/
-│   │   │   ├── langgraph_app.py    # Main workflow engine (1362 lines)
-│   │   │   └── __init__.py
-│   │   ├── llm/
-│   │   │   └── __init__.py
-│   │   └── __init__.py
-│   ├── alembic/
-│   │   ├── env.py                  # Migration environment
-│   │   ├── alembic.ini             # Alembic config
-│   │   └── versions/               # Database migrations
-│   ├── requirements-all.txt        # Python dependencies
-│   ├── docker-compose.yml          # Service orchestration
-│   ├── alembic.ini                 # Database migrations
-│   ├── setup_database.sh           # DB initialization script
-│   ├── start_server.sh             # Backend startup script
-│   ├── test_audio_upload.py        # Audio testing
-│   ├── test_gemini_*.py            # LLM testing scripts
-│   └── README.MD
+│   │   ├── api/           # API routes
+│   │   ├── core/          # Prompts, config
+│   │   ├── db/            # Database setup
+│   │   ├── farm_agent/    # LangGraph workflow
+│   │   ├── models/        # DB models
+│   │   └── services/      # LLM, STT, TTS, Vision
+│   ├── alembic/           # Database migrations
+│   ├── Dockerfile
+│   └── requirements-lock.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx                 # Main React component
-│   │   ├── App.css                 # Global styles
-│   │   ├── main.jsx                # React entry point
-│   │   └── components/
-│   │   │   ├── Recorder.jsx        # Audio recorder
-│   │   │   ├── CameraCapture.jsx   # Camera interface
-│   │   │   ├── Chatbot.jsx         # Chat interface
-│   │   │   └── ConversationHistory.jsx  # History panel
-│   ├── public/                     # Static assets
-│   ├── vite.config.js              # Vite configuration
-│   ├── package.json                # Node.js dependencies
-│   ├── index.html                  # HTML template
-│   └── README.md
-├── LICENSE
-├── README.md                       # This file
-└── RUN_PROJECT.md                  # Quick run guide
+│   │   ├── components/    # React components
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── public/            # PWA assets, icons
+│   ├── Dockerfile
+│   └── package.json
+├── docker-compose.yml
+├── .env
+└── README.md
 ```
 
----
+## 🐛 Troubleshooting
 
-##  Development Guide
-
-### Adding New Crops
-
-Edit `backend/app/farm_agent/langgraph_app.py` - search for `bengali_indicators`:
-
-```python
-bengali_indicators = [
-    # Existing crops...
-    "নতুন_ফসল",  # New crop in Bengali
-    "new_crop",   # New crop in English
-]
-```
-
-### Extending Vision Model
-
-Replace YOLOv8 with custom model in `backend/app/models/vision.py`:
-
-```python
-def run_vision_classifier(image_path: str) -> dict:
-    # Load your custom model
-    model = load_custom_model()
-    
-    # Run inference
-    results = model.predict(image_path)
-    
-    return {
-        "disease": results["disease_name"],
-        "confidence": results["confidence"],
-        "treatment": results["recommended_treatment"]
-    }
-```
-
-### Adding New API Routes
-
-Create new route in `backend/app/api/routes.py`:
-
-```python
-@router.get("/crops")
-async def get_crops():
-    """Get list of supported crops"""
-    return {"crops": ["rice", "tomato", "potato", ...]}
-```
-
-### Running Tests
-
+### Rate Limit Errors (Gemini)
+**Symptom:** "429 You exceeded your current quota"
+**Solution:** Switch to Hugging Face in `.env`:
 ```bash
-cd backend
-pytest -v
-
-# Test specific module
-pytest tests/test_vision.py -v
-
-# Test with coverage
-pytest --cov=app tests/
+LLM_PROVIDER=huggingface
 ```
 
----
+### Voice Recording Not Working
+**Solution:** Ensure HTTPS or localhost, grant microphone permissions in browser settings
 
-##  Troubleshooting
+### Location Not Tracking
+**Solution:** Grant location permissions, check GPS accuracy settings
 
-### Common Issues
-
-#### 1. Database Connection Error
-**Error**: `FATAL: Ident authentication failed`
-
-**Solution**:
+### Database Connection Errors
+**Solution:** Verify PostgreSQL is running:
 ```bash
-# Check PostgreSQL is running
-docker ps | grep postgres
-
-# Restart PostgreSQL
-docker compose down
-docker compose up -d postgres
+docker compose ps postgres
+docker compose logs postgres
 ```
 
-#### 2. Gemini API Key Invalid
-**Error**: `401 Unauthorized`
-
-**Solution**:
-- Verify API key in `.env`
-- Check key has Gemini API enabled
-- Generate new key from Google Cloud Console
-
-#### 3. Audio Upload Fails
-**Error**: `413 Payload Too Large`
-
-**Solution**:
-```python
-# Increase FastAPI size limit in backend/app/main.py
-app = FastAPI(
-    max_upload_size=50_000_000  # 50MB
-)
-```
-
-#### 4. TTS Not Generating
-**Error**: `TTS file not found`
-
-**Solution**:
+### Frontend Can't Connect to Backend
+**Solution:** Check CORS settings and API URL:
 ```bash
-# Check upload directory permissions
-chmod 777 /tmp/uploads
-
-# Verify gTTS installation
-pip install --upgrade gtts
+# frontend/.env
+VITE_API_URL=http://localhost:8000
 ```
 
-#### 5. Vision Model Won't Load
-**Error**: `weights_only error`
+## 🔒 Security Notes
 
-**Solution**:
-```bash
-# Update PyTorch
-pip install --upgrade torch torchvision
+- Never commit `.env` file to version control
+- Rotate API keys regularly
+- Use environment-specific configurations for production
+- Enable HTTPS for production deployments
+- Review and restrict CORS origins in production
 
-# Update Ultralytics
-pip install --upgrade ultralytics
-```
+## 📝 License
 
----
+[Add your license here]
 
-##  Performance Metrics
-
-### Expected Response Times
-
-| Operation | Time | Notes |
-|-----------|------|-------|
-| Audio Upload | 1-2s | Depends on audio length |
-| STT Processing | 3-5s | Gemini transcription |
-| Vision Analysis | 2-4s | YOLOv8 inference |
-| LLM Response | 3-8s | Gemini generation |
-| TTS Generation | 2-4s | gTTS audio synthesis |
-| **Total E2E** | 12-25s | End-to-end processing |
-
-### Resource Requirements
-
-- **CPU**: 2+ cores recommended
-- **RAM**: 4GB minimum (8GB+ for vision)
-- **Storage**: 2GB (includes models)
-- **Network**: 2Mbps+ upload speed
-
----
-
-##  Deployment
-
-### Docker Deployment
-
-```bash
-# Build image
-docker build -t krishibondhu:latest backend/
-
-# Run container
-docker run -p 8000:8000 \
-  -e GEMINI_API_KEY=$GEMINI_API_KEY \
-  -e DATABASE_URL="postgresql://..." \
-  krishibondhu:latest
-```
-
-### Cloud Deployment (AWS, GCP, Azure)
-
-Refer to `DEPLOYMENT.md` for cloud-specific instructions.
-
----
-
-##  Contributing
-
-### Development Workflow
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch: `git checkout -b feature/your-feature`
-3. Make changes and test
-4. Commit: `git commit -m "Add feature"`
-5. Push: `git push origin feature/your-feature`
-6. Create Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### Code Standards
+## 📧 Support
 
-- **Python**: PEP 8, use Black for formatting
-- **JavaScript**: ESLint configured
-- **Comments**: Clear, concise documentation
-- **Tests**: Minimum 80% coverage
+For issues and questions:
+- Open an issue on GitHub
+- Check existing issues for solutions
+- Review API documentation at http://localhost:8000/docs
 
----
+## 🙏 Acknowledgments
 
-## 📄 License
-
-This project is licensed under the [LICENSE](./LICENSE) file.
-
----
-
-## 📞 Support & Contact
-
-- **Issues**: Create GitHub issue with detailed description
-- **Discussions**: Use GitHub Discussions for questions
-- **Email**: 
-- **Documentation**: 
+- Google Gemini API for LLM and Vision capabilities
+- Hugging Face for free-tier model hosting
+- LangGraph for workflow orchestration
+- FastAPI and React communities
 
 ---
 
-##  Acknowledgments
-
-- **Google Gemini API**: LLM and vision capabilities
-- **Ultralytics YOLOv8**: Object detection framework
-- **LangGraph**: Workflow orchestration
-- **Open-Meteo**: Free weather API
-- **Contributors**: 
-
----
-
-**Last Updated**: November 17, 2024
-**Version**: 1.0.0
-**Status**: Active Development
+**Made with ❤️ for farmers in Bangladesh**

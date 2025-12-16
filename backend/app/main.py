@@ -13,6 +13,52 @@ load_dotenv()
 
 app = FastAPI(title="KrishiBondhu API")
 
+# Helper to get/create user
+from app.models.db_models import User, Conversation
+from sqlalchemy import select
+
+async def get_current_user_db_id(external_id: str, db: AsyncSession) -> int:
+    try:
+        result = await db.execute(select(User).where(User.external_id == external_id))
+        user = result.scalars().first()
+        if not user:
+            user = User(external_id=external_id)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        return user.id
+    except Exception as e:
+         print(f"[ERROR] Could not get/create user: {e}")
+         return None
+
+async def save_conversation_to_db(
+    db: AsyncSession, 
+    user_db_id: int, 
+    transcript: str, 
+    reply_text: str,
+    metadata: dict = None,
+    tts_path: str = None
+):
+    try:
+        if not user_db_id:
+            return
+        
+        # Ensure metadata is JSON serializable
+        import json
+        # Filter out unserializable objects if any (though clean_result should be fine)
+        
+        conv = Conversation(
+            user_id=user_db_id,
+            transcript=transcript,
+            meta_data={"reply_text": reply_text, **(metadata or {})}, # Store reply in metadata as per schema
+            tts_path=tts_path
+        )
+        db.add(conv)
+        await db.commit()
+        print(f"[DEBUG] Saved conversation for user_id {user_db_id}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save conversation: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,7 +75,8 @@ async def upload_audio(
     user_id: str = Form(...), 
     lat: float = Form(None), 
     lon: float = Form(None),
-    image: UploadFile = File(None)
+    image: UploadFile = File(None),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Save uploaded audio file (and optional image), invoke the LangGraph flow, and return the resulting state.
@@ -51,8 +98,25 @@ async def upload_audio(
         result = await langgraph_app.ainvoke(initial_state)
         # Ensure we always have a reply_text
         if not result.get("reply_text"):
-            result["reply_text"] = "I processed your audio but couldn't generate a response. Please try again."
-        
+             result["reply_text"] = "I processed your audio but couldn't generate a response. Please try again."
+
+        # SAVE TO DB
+        user_db_id = await get_current_user_db_id(user_id, db)
+        await save_conversation_to_db(
+            db, 
+            user_db_id, 
+            result.get("transcript", ""), 
+            result.get("reply_text", ""), 
+            metadata={
+                "crop": result.get("crop"),
+                "vision_result": result.get("vision_result"),
+                "weather_forecast": result.get("weather_forecast"),
+                "language": result.get("language"),
+                "gps": result.get("gps")
+            },
+            tts_path=result.get("tts_path")
+        )
+
         # Clean up non-serializable objects for JSON response
         clean_result = {
             "transcript": result.get("transcript", ""),
@@ -82,13 +146,14 @@ async def upload_image(
     user_id: str = Form(...),
     lat: float = Form(None),
     lon: float = Form(None),
-    question: str = Form("")
+    question: str = Form(""),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Upload image for analysis. Can include optional text question.
     """
     # Import language detection function
-    from app.farm_agent.langgraph_app import detect_language_from_text
+    from app.services.audio import detect_language_from_text
     
     image_path = await save_image_local(image)
     
@@ -112,8 +177,26 @@ async def upload_image(
         # We'll modify the flow to handle image-only queries
         result = await langgraph_app.ainvoke(initial_state)
         # Ensure we always have a reply_text
+        # Ensure we always have a reply_text
         if not result.get("reply_text"):
-            result["reply_text"] = "I analyzed your image but couldn't generate a detailed response. Please try again."
+             result["reply_text"] = "I analyzed your image but couldn't generate a detailed response. Please try again."
+
+        # SAVE TO DB
+        user_db_id = await get_current_user_db_id(user_id, db)
+        await save_conversation_to_db(
+            db, 
+            user_db_id, 
+            result.get("transcript", question), 
+            result.get("reply_text", ""), 
+            metadata={
+                "crop": result.get("crop"),
+                "vision_result": result.get("vision_result"),
+                "weather_forecast": result.get("weather_forecast"),
+                "language": result.get("language"),
+                "gps": result.get("gps")
+            },
+            tts_path=result.get("tts_path")
+        )
         
         # Clean up non-serializable objects for JSON response
         clean_result = {
@@ -153,7 +236,7 @@ async def chat(
     Text-based chatbot endpoint. Can include optional image and chat history.
     """
     # Import language detection function
-    from app.farm_agent.langgraph_app import detect_language_from_text
+    from app.services.audio import detect_language_from_text
     from sqlalchemy import select, desc
     from app.models.db_models import Conversation
     
@@ -170,13 +253,17 @@ async def chat(
     if include_history and db:
         try:
             # Query previous conversations for this user
-            result = await db.execute(
-                select(Conversation)
-                .where(Conversation.user_id == user_id)
-                .order_by(desc(Conversation.created_at))
-                .limit(5)  # Get last 5 conversations
-            )
-            previous_convs = result.scalars().all()
+            # First get internal numeric ID
+            user_db_id = await get_current_user_db_id(user_id, db)
+            
+            if user_db_id:
+                result = await db.execute(
+                    select(Conversation)
+                    .where(Conversation.user_id == user_db_id)
+                    .order_by(desc(Conversation.created_at))
+                    .limit(5)  # Get last 5 conversations
+                )
+                previous_convs = result.scalars().all()
             
             # Reverse to get chronological order (oldest to newest)
             previous_convs = list(reversed(previous_convs))
@@ -207,9 +294,27 @@ async def chat(
         # For text-only chat, skip STT and go to reasoning
         result = await langgraph_app.ainvoke(initial_state)
         # Ensure we always have a reply_text
+        # Ensure we always have a reply_text
         if not result.get("reply_text"):
             result["reply_text"] = "I received your message but couldn't generate a response. Please try again."
         
+        # SAVE TO DB
+        user_db_id = await get_current_user_db_id(user_id, db)
+        await save_conversation_to_db(
+            db, 
+            user_db_id, 
+            result.get("transcript", ""), 
+            result.get("reply_text", ""), 
+            metadata={
+                "crop": result.get("crop"),
+                "vision_result": result.get("vision_result"),
+                "weather_forecast": result.get("weather_forecast"),
+                "language": result.get("language"),
+                "gps": result.get("gps")
+            },
+            tts_path=result.get("tts_path")
+        )
+
         # Clean up non-serializable objects for JSON response
         clean_result = {
             "transcript": result.get("transcript", ""),

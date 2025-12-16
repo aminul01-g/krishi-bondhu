@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function Recorder({ onConversationComplete }) {
   const [recording, setRecording] = useState(false)
@@ -23,6 +23,12 @@ export default function Recorder({ onConversationComplete }) {
   // Get GPS location on component mount
   useEffect(() => {
     getCurrentLocation()
+    // Initialize or retrieve user_id
+    let storedUserId = localStorage.getItem('krishi_user_id')
+    if (!storedUserId) {
+      storedUserId = `farmer_${Date.now()}`
+      localStorage.setItem('krishi_user_id', storedUserId)
+    }
   }, [])
 
   const getCurrentLocation = () => {
@@ -46,7 +52,8 @@ export default function Recorder({ onConversationComplete }) {
         setGpsStatus('error')
         // Default to Dhaka, Bangladesh if GPS fails
         setGps({ lat: 23.7, lon: 90.4 })
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
 
@@ -72,7 +79,9 @@ export default function Recorder({ onConversationComplete }) {
         // Upload to backend
         const fd = new FormData()
         fd.append('file', blob, 'recording.webm')
-        fd.append('user_id', `farmer_${Date.now()}`)
+        // Use persisted user_id
+        const userId = localStorage.getItem('krishi_user_id') || `farmer_${Date.now()}`
+        fd.append('user_id', userId)
         if (gps.lat && gps.lon) {
           fd.append('lat', gps.lat)
           fd.append('lon', gps.lon)
@@ -136,12 +145,12 @@ export default function Recorder({ onConversationComplete }) {
             }
             throw new Error(data.error || `HTTP ${resp.status}: ${data.reply_text || 'Server error'}`)
           }
-          
+
           // Check if there's an error in the response (but still show reply_text if available)
           if (data.error && !data.reply_text) {
             throw new Error(data.error)
           }
-          
+
           setResponse(data)
 
           // Play TTS response if available
@@ -178,7 +187,7 @@ export default function Recorder({ onConversationComplete }) {
           if (onConversationComplete) {
             onConversationComplete()
           }
-          
+
           // Clear image after successful upload
           setSelectedImage(null)
           setImagePreview(null)
@@ -388,7 +397,7 @@ export default function Recorder({ onConversationComplete }) {
       {response && (
         <div className="response-display">
           <h3>Response</h3>
-          
+
           {response.transcript && (
             <div className="response-item">
               <strong>Your Question:</strong>
@@ -421,7 +430,7 @@ export default function Recorder({ onConversationComplete }) {
             <div className="response-item">
               <strong>Vision Analysis:</strong>
               <p>
-                {response.vision_result.disease} 
+                {response.vision_result.disease}
                 {response.vision_result.confidence && (
                   <span className="confidence">
                     ({(response.vision_result.confidence * 100).toFixed(1)}% confidence)
