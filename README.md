@@ -2,7 +2,7 @@
 
 An intelligent agricultural assistant designed specifically for farmers in Bangladesh, providing real-time crop advice, disease diagnosis, and farming guidance in both Bengali and English through voice, text, and image inputs.
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
 - **Multi-Modal Input**: Voice recording, text chat, and image upload
@@ -19,7 +19,7 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
 - **Responsive UI**: Mobile-first design optimized for field use
 - **Docker Deployment**: Containerized for easy setup and scaling
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Frontend
 - **Framework**: React 18 + Vite
@@ -47,7 +47,7 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
 - **Reverse Proxy**: Nginx-ready configuration
 - **Deployment**: Supports cloud and on-premise
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Docker & Docker Compose (recommended)
 - OR Python 3.11+, Node.js 18+, PostgreSQL 15+
@@ -55,7 +55,7 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
   - Google Gemini API key (free tier available)
   - Hugging Face API key (optional, free tier available)
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### 1. Clone Repository
 ```bash
@@ -111,7 +111,7 @@ docker compose ps
 docker compose logs -f backend
 ```
 
-## 🔧 Configuration
+##  Configuration
 
 ### Switching LLM Providers
 
@@ -141,7 +141,7 @@ docker compose restart backend
 - `models/gemini-2.5-flash` (default)
 - Rate limit: 20 requests/day on free tier
 
-## 📱 Usage
+##  Usage
 
 ### Web Interface
 1. Open http://localhost:5173 in your browser
@@ -180,7 +180,7 @@ curl -X POST http://localhost:8000/api/upload_audio \
   -F "user_id=farmer_123"
 ```
 
-## 🏗️ Development
+##  Development
 
 ### Local Development (Without Docker)
 
@@ -251,7 +251,7 @@ krishi-bondhu/
 └── README.md
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Rate Limit Errors (Gemini)
 **Symptom:** "429 You exceeded your current quota"
@@ -280,7 +280,7 @@ docker compose logs postgres
 VITE_API_URL=http://localhost:8000
 ```
 
-## 🔒 Security Notes
+##  Security Notes
 
 - Never commit `.env` file to version control
 - Rotate API keys regularly
@@ -288,9 +288,6 @@ VITE_API_URL=http://localhost:8000
 - Enable HTTPS for production deployments
 - Review and restrict CORS origins in production
 
-## 📝 License
-
-[Add your license here]
 
 ## 🤝 Contributing
 
