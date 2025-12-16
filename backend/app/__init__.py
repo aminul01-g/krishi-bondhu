@@ -1,2 +1,0 @@
-# FarmAssist backend application
-

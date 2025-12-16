@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 
 import React, { useState, useRef } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8001/api'
+const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function ImageUpload({ onUploadComplete }) {
   const [selectedImage, setSelectedImage] = useState(null)
@@ -19,6 +19,12 @@ export default function ImageUpload({ onUploadComplete }) {
 
   useEffect(() => {
     getCurrentLocation()
+    // Initialize or retrieve user_id
+    let storedUserId = localStorage.getItem('krishi_user_id')
+    if (!storedUserId) {
+      storedUserId = `farmer_${Date.now()}`
+      localStorage.setItem('krishi_user_id', storedUserId)
+    }
   }, [])
 
   const getCurrentLocation = () => {
@@ -41,7 +47,8 @@ export default function ImageUpload({ onUploadComplete }) {
         console.error('GPS error:', err)
         setGpsStatus('error')
         setGps({ lat: 23.7, lon: 90.4 })
-      }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     )
   }
 
@@ -55,7 +62,7 @@ export default function ImageUpload({ onUploadComplete }) {
       setSelectedImage(file)
       setError(null)
       setResponse(null)
-      
+
       // Create preview
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -77,7 +84,8 @@ export default function ImageUpload({ onUploadComplete }) {
 
     const fd = new FormData()
     fd.append('image', selectedImage)
-    fd.append('user_id', `farmer_${Date.now()}`)
+    const userId = localStorage.getItem('krishi_user_id') || `farmer_${Date.now()}`
+    fd.append('user_id', userId)
     if (gps.lat && gps.lon) {
       fd.append('lat', gps.lat)
       fd.append('lon', gps.lon)
@@ -130,12 +138,12 @@ export default function ImageUpload({ onUploadComplete }) {
         }
         throw new Error(data.error || `HTTP ${resp.status}: ${data.reply_text || 'Server error'}`)
       }
-      
+
       // Check if there's an error in the response (but still show reply_text if available)
       if (data.error && !data.reply_text) {
         throw new Error(data.error)
       }
-      
+
       setResponse(data)
 
       // Play TTS if available
@@ -222,7 +230,7 @@ export default function ImageUpload({ onUploadComplete }) {
               <button onClick={handleClear} className="clear-btn">✕ Remove</button>
             </div>
           ) : (
-            <div 
+            <div
               className="image-drop-zone"
               onClick={() => fileInputRef.current?.click()}
             >
@@ -302,7 +310,7 @@ export default function ImageUpload({ onUploadComplete }) {
       {response && (
         <div className="response-display">
           <h3>Analysis Result</h3>
-          
+
           {response.reply_text && (
             <div className="response-item">
               <strong>AI Response:</strong>

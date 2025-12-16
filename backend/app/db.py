@@ -9,7 +9,7 @@ load_dotenv()
 
 # Use SQLite for development if PostgreSQL is not available
 database_url = os.getenv("DATABASE_URL")
-if not database_url or "postgresql" in database_url:
+if not database_url:
     # Try to use SQLite in-memory or file-based as fallback
     database_url = "sqlite+aiosqlite:///:memory:"
     print("[INFO] Using SQLite in-memory database for development")
