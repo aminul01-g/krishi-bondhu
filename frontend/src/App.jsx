@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 import Recorder from './components/Recorder'
 import CameraCapture from './components/CameraCapture'
 import Chatbot from './components/Chatbot'
@@ -146,6 +147,8 @@ export default function App() {
       <footer className="app-footer">
         <p>KrishiBondhu - Empowering farmers with AI technology 🌾🤖</p>
       </footer>
+
+      <SpeedInsights />
     </div>
   )
 }
