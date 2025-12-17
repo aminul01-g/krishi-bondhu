@@ -200,3 +200,15 @@ yolov8n.pt
 # OS generated files
 Desktop.ini
 ~$*
+
+# Virtual environments (duplicate entry, combining)
+venv/
+env/
+.venv/
+ENV/
+
+# Model files (download on deployment)
+*.pt
+*.pth
+*.h5
+*.onnx
