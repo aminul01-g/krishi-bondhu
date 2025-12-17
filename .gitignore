@@ -175,7 +175,7 @@ debug.log
 # Docker
 docker-compose.override.yml
 docker-compose.*.yml
-**/Dockerfile
+
 
 # Alembic/ migrations caches
 *.pyc
