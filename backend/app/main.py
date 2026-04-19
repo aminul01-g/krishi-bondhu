@@ -4,15 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
+from dotenv import load_dotenv
+
+# Load environment variables before importing LLM/agent modules.
+load_dotenv()
+
 from app.farm_agent.langgraph_app import app as langgraph_app
 from app.api.utils import save_audio_local, save_image_local
 from app.services.audio import stt_node
-from dotenv import load_dotenv
 from app.api import routes as api_routes
 from app.db import get_db, engine, DATABASE_URL
 from app.models.db_models import Base
-
-load_dotenv()
 
 app = FastAPI(title="KrishiBondhu API")
 
