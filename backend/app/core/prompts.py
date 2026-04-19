@@ -13,6 +13,7 @@ CRITICAL INSTRUCTIONS:
    - Do NOT insert agricultural advice, context, or terminology unless explicitly spoken.
    - If the user asks "Who are you?", transcribe ONLY "Who are you?". Do NOT answer the question.
    - If the audio is short, transcribe it exactly as is (e.g., "Hello", "Kemon acho", "Dhaner rog").
+   - Do NOT add punctuation or formatting beyond exact spoken words.
 
 3. LANGUAGE RULES:
    - If audio is in Bengali, transcribe in Bengali script.
@@ -21,6 +22,7 @@ CRITICAL INSTRUCTIONS:
 
 4. NOISE & SILENCE:
    - If the audio is silent, just noise, unintelligible, music, or contains no human speech, return EXACTLY: "EMPTY_AUDIO"
+   - If the speech is unclear or fragmented, return EXACTLY: "EMPTY_AUDIO"
    - Do NOT guess what might have been said.
 
 Output ONLY the transcription or "EMPTY_AUDIO". No other text."""

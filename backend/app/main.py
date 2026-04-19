@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import os
 from app.farm_agent.langgraph_app import app as langgraph_app
 from app.api.utils import save_audio_local, save_image_local
+from app.services.audio import stt_node
 from dotenv import load_dotenv
 from app.api import routes as api_routes
-from app.db import get_db
+from app.db import get_db, engine, DATABASE_URL
+from app.models.db_models import Base
 
 load_dotenv()
 
@@ -68,6 +70,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def create_database_tables():
+    if "sqlite" in DATABASE_URL:
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("[INFO] SQLite fallback database tables created or already exist.")
+        except Exception as e:
+            print(f"[ERROR] Failed to create SQLite tables: {e}")
+
 app.include_router(api_routes.router, prefix="/api")
 
 @app.post('/api/upload_audio')
@@ -94,6 +106,23 @@ async def upload_audio(
         "image_path": image_path,
         "messages": []
     }
+
+    # Transcribe first and reject unclear audio before generating advice
+    stt_result = stt_node(initial_state)
+    transcript = stt_result.get("transcript", "").strip()
+    language = stt_result.get("language", "en")
+
+    if stt_result.get("unclear"):
+        return JSONResponse({
+            "error": "Unable to understand voice clearly",
+            "reply_text": "I did not understand your voice clearly. Please speak more clearly or repeat your question.",
+            "transcript": transcript,
+            "language": language
+        }, status_code=200)
+
+    initial_state["transcript"] = transcript
+    initial_state["language"] = language
+
     try:
         # Use ainvoke for async nodes (respond_node is async)
         result = await langgraph_app.ainvoke(initial_state)

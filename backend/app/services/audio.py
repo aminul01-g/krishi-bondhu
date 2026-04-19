@@ -45,6 +45,22 @@ def detect_language_from_text(text: str) -> str:
     else:
         return "en"
 
+
+def is_unclear_transcript(transcript: str) -> bool:
+    if not transcript or not transcript.strip():
+        return True
+    normalized = transcript.strip()
+    if normalized == "EMPTY_AUDIO":
+        return True
+    words = normalized.split()
+    if len(words) <= 1:
+        return True
+    # If the transcript is extremely short and not a clear question, request repetition
+    if len(words) <= 2 and len(normalized) < 15:
+        return True
+    return False
+
+
 def transcribe_with_gemini(audio_path: str) -> dict:
     """
     Transcribe audio using Gemini API.
@@ -61,8 +77,14 @@ def transcribe_with_gemini(audio_path: str) -> dict:
             
         mime_type, _ = mimetypes.guess_type(audio_path)
         if not mime_type:
-            mime_type = "audio/webm"
+            if audio_path.lower().endswith('.wav'):
+                mime_type = 'audio/wav'
+            elif audio_path.lower().endswith('.mp3'):
+                mime_type = 'audio/mpeg'
+            else:
+                mime_type = 'audio/webm'
             
+        print(f"Using audio MIME type: {mime_type}")
         print("Generating transcription with Gemini...")
         
         try:
@@ -99,10 +121,14 @@ def transcribe_with_gemini(audio_path: str) -> dict:
         
         if transcript_text == "EMPTY_AUDIO":
              print(f"Transcription returned EMPTY_AUDIO. Returning empty string.")
-             return {"text": "", "language": "en"}
+             return {"text": "", "language": "en", "unclear": True}
         
-        print(f"Transcription successful. Language: {language}, Text length: {len(transcript_text)}")
-        return {"text": transcript_text, "language": language}
+        unclear = is_unclear_transcript(transcript_text)
+        if unclear:
+            print(f"Transcription looks unclear: {transcript_text}")
+        else:
+            print(f"Transcription successful. Language: {language}, Text length: {len(transcript_text)}")
+        return {"text": transcript_text, "language": language, "unclear": unclear}
         
     except Exception as e:
         print(f"[ERROR] Audio transcription failed: {e}")
@@ -120,7 +146,11 @@ def stt_node(state):
         return {"transcript": transcript, "language": detected_lang}
     
     if not state.get("audio_path"):
-        return {"transcript": "", "language": "en"}
+        return {"transcript": "", "language": "en", "unclear": True}
     
     stt = transcribe_with_gemini(state["audio_path"])
-    return {"transcript": stt.get("text", "").strip(), "language": stt.get("language", "en")}
+    return {
+        "transcript": stt.get("text", "").strip(),
+        "language": stt.get("language", "en"),
+        "unclear": stt.get("unclear", False)
+    }

@@ -10,9 +10,10 @@ load_dotenv()
 # Use SQLite for development if PostgreSQL is not available
 database_url = os.getenv("DATABASE_URL")
 if not database_url:
-    # Try to use SQLite in-memory or file-based as fallback
-    database_url = "sqlite+aiosqlite:///:memory:"
-    print("[INFO] Using SQLite in-memory database for development")
+    sqlite_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend.db'))
+    os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
+    database_url = f"sqlite+aiosqlite:///{sqlite_path}"
+    print(f"[INFO] Using persistent SQLite fallback database at {sqlite_path}")
 
 DATABASE_URL = database_url
 
