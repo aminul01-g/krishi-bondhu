@@ -330,6 +330,12 @@ body {
   margin: 0.25rem 0.25rem 0.25rem 0;
 }
 
+.badge.stt-source {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
 .confidence {
   color: var(--text-secondary);
   font-size: 0.85rem;

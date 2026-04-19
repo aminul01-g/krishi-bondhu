@@ -1,10 +1,22 @@
 
 import os
+import mimetypes
+import json
+import requests
 import google.generativeai as genai
 from dotenv import load_dotenv
 from app.core.prompts import GEMINI_TRANSCRIPTION_PROMPT
 
 load_dotenv()
+
+try:
+    from google.cloud import speech
+except ImportError:
+    speech = None
+
+GOOGLE_SPEECH_CREDENTIALS_JSON = os.getenv("GOOGLE_SPEECH_CREDENTIALS_JSON") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+HUGGINGFACE_SPEECH_MODEL = os.getenv("HUGGINGFACE_SPEECH_MODEL", "openai/whisper-large-v2")
 
 # Initialize Gemini model for audio (can reuse the one from LLM service or separate)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -134,7 +146,114 @@ def transcribe_with_gemini(audio_path: str) -> dict:
         print(f"[ERROR] Audio transcription failed: {e}")
         import traceback
         traceback.print_exc()
-        return {"text": "", "language": "en"}
+        return {"text": "", "language": "en", "unclear": True}
+
+
+def transcribe_with_google_speech(audio_path: str) -> dict:
+    if speech is None:
+        raise Exception("google-cloud-speech is not installed")
+    if not GOOGLE_SPEECH_CREDENTIALS_JSON:
+        raise Exception("Google Speech credentials are not configured")
+    if not os.path.exists(audio_path):
+        raise Exception(f"Audio file not found: {audio_path}")
+
+    print(f"Transcribing with Google Speech-to-Text: {audio_path}")
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_SPEECH_CREDENTIALS_JSON
+    client = speech.SpeechClient()
+
+    mime_type, _ = mimetypes.guess_type(audio_path)
+    if not mime_type:
+        mime_type = "audio/webm"
+
+    encoding = speech.RecognitionConfig.AudioEncoding.ENCODING_UNSPECIFIED
+    if mime_type == "audio/webm":
+        encoding = speech.RecognitionConfig.AudioEncoding.WEBM_OPUS
+    elif mime_type == "audio/wav":
+        encoding = speech.RecognitionConfig.AudioEncoding.LINEAR16
+    elif mime_type in {"audio/mpeg", "audio/mp3"}:
+        encoding = speech.RecognitionConfig.AudioEncoding.MP3
+
+    with open(audio_path, 'rb') as f:
+        audio_data = f.read()
+
+    config = speech.RecognitionConfig(
+        encoding=encoding,
+        language_code="en-US",
+        alternative_language_codes=["bn-BD"],
+        enable_automatic_punctuation=False,
+        max_alternatives=1,
+        model="latest_long",
+        use_enhanced=True
+    )
+    audio = speech.RecognitionAudio(content=audio_data)
+
+    response = client.recognize(config=config, audio=audio)
+    if not response.results:
+        raise Exception("Google Speech returned no transcription results")
+
+    transcript_text = " ".join([result.alternatives[0].transcript for result in response.results if result.alternatives])
+    transcript_text = transcript_text.strip()
+    if not transcript_text:
+        raise Exception("Google Speech returned empty transcript")
+
+    language = detect_language_from_text(transcript_text)
+    unclear = is_unclear_transcript(transcript_text)
+    return {"text": transcript_text, "language": language, "unclear": unclear}
+
+
+def transcribe_with_huggingface_whisper(audio_path: str) -> dict:
+    if not HUGGINGFACE_API_KEY:
+        raise Exception("Hugging Face API key is not configured")
+    if not os.path.exists(audio_path):
+        raise Exception(f"Audio file not found: {audio_path}")
+
+    url = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_SPEECH_MODEL}"
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+        "Accept": "application/json"
+    }
+
+    with open(audio_path, 'rb') as f:
+        audio_data = f.read()
+
+    print(f"Transcribing with Hugging Face Whisper: {HUGGINGFACE_SPEECH_MODEL}")
+    resp = requests.post(url, headers=headers, data=audio_data)
+    if resp.status_code != 200:
+        raise Exception(f"Hugging Face Whisper failed: {resp.status_code} {resp.text}")
+
+    result = resp.json()
+    transcript_text = result.get("text") if isinstance(result, dict) else None
+    if not transcript_text:
+        raise Exception(f"Hugging Face Whisper returned invalid response: {result}")
+
+    transcript_text = transcript_text.strip()
+    if not transcript_text:
+        raise Exception("Hugging Face Whisper returned empty transcript")
+
+    language = detect_language_from_text(transcript_text)
+    unclear = is_unclear_transcript(transcript_text)
+    return {"text": transcript_text, "language": language, "unclear": unclear}
+
+
+def transcribe_audio(audio_path: str) -> dict:
+    try:
+        result = transcribe_with_google_speech(audio_path)
+        result["stt_source"] = "Google Speech-to-Text"
+        return result
+    except Exception as google_error:
+        print(f"[WARN] Google Speech-to-Text fallback: {google_error}")
+
+    try:
+        result = transcribe_with_huggingface_whisper(audio_path)
+        result["stt_source"] = "Hugging Face Whisper"
+        return result
+    except Exception as hf_error:
+        print(f"[WARN] Hugging Face Whisper fallback: {hf_error}")
+
+    result = transcribe_with_gemini(audio_path)
+    result["stt_source"] = "Gemini"
+    return result
+
 
 def stt_node(state):
     print(f"[DEBUG] STT node: Starting")
@@ -143,14 +262,15 @@ def stt_node(state):
     if state.get("transcript"):
         transcript = state["transcript"]
         detected_lang = detect_language_from_text(transcript)
-        return {"transcript": transcript, "language": detected_lang}
+        return {"transcript": transcript, "language": detected_lang, "stt_source": "text_input"}
     
     if not state.get("audio_path"):
-        return {"transcript": "", "language": "en", "unclear": True}
+        return {"transcript": "", "language": "en", "unclear": True, "stt_source": None}
     
-    stt = transcribe_with_gemini(state["audio_path"])
+    stt = transcribe_audio(state["audio_path"])
     return {
         "transcript": stt.get("text", "").strip(),
         "language": stt.get("language", "en"),
-        "unclear": stt.get("unclear", False)
+        "unclear": stt.get("unclear", False),
+        "stt_source": stt.get("stt_source", "unknown")
     }

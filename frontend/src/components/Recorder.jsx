@@ -249,6 +249,15 @@ export default function Recorder({ onConversationComplete }) {
     }
   }
 
+  const handleRepeat = () => {
+    setError(null)
+    setResponse(null)
+    setAudioUrl(null)
+    if (!recording && !processing) {
+      start()
+    }
+  }
+
   const toggleTTS = () => {
     if (ttsAudioRef.current) {
       if (isPaused || !isPlaying) {
@@ -377,6 +386,19 @@ export default function Recorder({ onConversationComplete }) {
         </div>
       )}
 
+      {response?.unclear_audio && (
+        <div className="warning-message">
+          ⚠️ Your recorded voice was not clear enough. Please repeat your question more slowly and clearly.
+          <button
+            onClick={handleRepeat}
+            disabled={recording || processing}
+            className="repeat-button"
+          >
+            🔁 Repeat
+          </button>
+        </div>
+      )}
+
       {/* TTS Control */}
       {ttsAudioRef.current && (
         <div className="tts-control">
@@ -422,6 +444,13 @@ export default function Recorder({ onConversationComplete }) {
             <div className="response-item">
               <strong>Language:</strong>
               <span className="badge">{response.language === 'bn' ? 'Bengali' : 'English'}</span>
+            </div>
+          )}
+
+          {response.stt_source && (
+            <div className="response-item">
+              <strong>Speech Recognition:</strong>
+              <span className="badge stt-source">{response.stt_source}</span>
             </div>
           )}
 

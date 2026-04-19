@@ -111,13 +111,16 @@ async def upload_audio(
     stt_result = stt_node(initial_state)
     transcript = stt_result.get("transcript", "").strip()
     language = stt_result.get("language", "en")
+    stt_source = stt_result.get("stt_source")
 
     if stt_result.get("unclear"):
         return JSONResponse({
             "error": "Unable to understand voice clearly",
             "reply_text": "I did not understand your voice clearly. Please speak more clearly or repeat your question.",
             "transcript": transcript,
-            "language": language
+            "language": language,
+            "stt_source": stt_source,
+            "unclear_audio": True
         }, status_code=200)
 
     initial_state["transcript"] = transcript
@@ -142,6 +145,7 @@ async def upload_audio(
                 "vision_result": result.get("vision_result"),
                 "weather_forecast": result.get("weather_forecast"),
                 "language": result.get("language"),
+                "stt_source": result.get("stt_source"),
                 "gps": result.get("gps")
             },
             tts_path=result.get("tts_path")
@@ -153,6 +157,7 @@ async def upload_audio(
             "reply_text": result.get("reply_text", ""),
             "crop": result.get("crop"),
             "language": result.get("language"),
+            "stt_source": result.get("stt_source"),
             "vision_result": result.get("vision_result"),
             "weather_forecast": result.get("weather_forecast"),
             "tts_path": result.get("tts_path"),
