@@ -454,8 +454,8 @@ export default function Recorder({ onConversationComplete }) {
             </div>
           )}
 
-          {response.stt_source_reason && (
-            <div className="response-item">
+          {response.stt_source_reason && response.stt_source !== 'Google Speech-to-Text' && (
+            <div className="response-debug-banner">
               <strong>STT Debug:</strong>
               <p className="response-debug">{response.stt_source_reason}</p>
             </div>
