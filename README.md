@@ -1,3 +1,14 @@
+---
+title: KrishiBondhu
+emoji: 👀
+colorFrom: red
+colorTo: blue
+sdk: docker
+pinned: false
+license: mit
+short_description: KrishiBondhu – AI-Powered Farmer Assistant built during BUBT
+---
+
 # KrishiBondhu - AI-Powered Agricultural Assistant 🌾
 
 An intelligent agricultural assistant designed specifically for farmers in Bangladesh, providing real-time crop advice, disease diagnosis, and farming guidance in both Bengali and English through voice, text, and image inputs.
