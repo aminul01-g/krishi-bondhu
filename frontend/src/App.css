@@ -336,6 +336,13 @@ body {
   letter-spacing: 0.5px;
 }
 
+.response-debug {
+  margin: 0.25rem 0 0 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .confidence {
   color: var(--text-secondary);
   font-size: 0.85rem;

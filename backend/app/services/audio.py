@@ -208,9 +208,14 @@ def transcribe_with_huggingface_whisper(audio_path: str) -> dict:
         raise Exception(f"Audio file not found: {audio_path}")
 
     url = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_SPEECH_MODEL}"
+    mime_type, _ = mimetypes.guess_type(audio_path)
+    if not mime_type:
+        mime_type = "application/octet-stream"
+
     headers = {
         "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Content-Type": mime_type
     }
 
     with open(audio_path, 'rb') as f:
@@ -236,22 +241,33 @@ def transcribe_with_huggingface_whisper(audio_path: str) -> dict:
 
 
 def transcribe_audio(audio_path: str) -> dict:
+    google_failure = None
+    hf_failure = None
+
     try:
         result = transcribe_with_google_speech(audio_path)
         result["stt_source"] = "Google Speech-to-Text"
+        result["stt_source_reason"] = "Succeeded"
         return result
     except Exception as google_error:
-        print(f"[WARN] Google Speech-to-Text fallback: {google_error}")
+        google_failure = str(google_error)
+        print(f"[WARN] Google Speech-to-Text fallback: {google_failure}")
 
     try:
         result = transcribe_with_huggingface_whisper(audio_path)
         result["stt_source"] = "Hugging Face Whisper"
+        result["stt_source_reason"] = f"Google Speech failed: {google_failure}"
         return result
     except Exception as hf_error:
-        print(f"[WARN] Hugging Face Whisper fallback: {hf_error}")
+        hf_failure = str(hf_error)
+        print(f"[WARN] Hugging Face Whisper fallback: {hf_failure}")
 
     result = transcribe_with_gemini(audio_path)
     result["stt_source"] = "Gemini"
+    result["stt_source_reason"] = (
+        f"Google Speech failed: {google_failure}; "
+        f"Hugging Face Whisper failed: {hf_failure}"
+    )
     return result
 
 

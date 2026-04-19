@@ -454,6 +454,13 @@ export default function Recorder({ onConversationComplete }) {
             </div>
           )}
 
+          {response.stt_source_reason && (
+            <div className="response-item">
+              <strong>STT Debug:</strong>
+              <p className="response-debug">{response.stt_source_reason}</p>
+            </div>
+          )}
+
           {response.vision_result && response.vision_result.disease && (
             <div className="response-item">
               <strong>Vision Analysis:</strong>

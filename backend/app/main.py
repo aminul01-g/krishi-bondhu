@@ -120,6 +120,7 @@ async def upload_audio(
             "transcript": transcript,
             "language": language,
             "stt_source": stt_source,
+            "stt_source_reason": stt_result.get("stt_source_reason"),
             "unclear_audio": True
         }, status_code=200)
 
@@ -158,6 +159,7 @@ async def upload_audio(
             "crop": result.get("crop"),
             "language": result.get("language"),
             "stt_source": result.get("stt_source"),
+            "stt_source_reason": result.get("stt_source_reason"),
             "vision_result": result.get("vision_result"),
             "weather_forecast": result.get("weather_forecast"),
             "tts_path": result.get("tts_path"),
