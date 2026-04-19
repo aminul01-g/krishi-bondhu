@@ -41,27 +41,43 @@ def call_huggingface_llm(prompt: str, system_instruction: str = None) -> str:
         if not client:
             raise Exception("Failed to initialize Hugging Face client.")
 
-        # Use conversational API for chat models
-        conversation = {
-            "inputs": {
-                "past_user_inputs": [],
-                "generated_responses": [],
-                "text": prompt
-            }
-        }
-        
-        response = client.conversational(conversation)
-        
-        # Extract the generated response
-        if hasattr(response, 'conversation') and response.conversation:
-            generated_response = response.conversation.get('generated_responses', [])
-            if generated_response:
-                return generated_response[-1]
-        
-        raise Exception("Empty response from Hugging Face.")
-    except Exception as e:
-        print(f"[ERROR] HuggingFace LLM call failed: {e}")
-        raise
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        response = client.chat_completion(
+            messages,
+            max_tokens=1024,
+            temperature=0.7
+        )
+
+        if hasattr(response, 'choices') and len(response.choices) > 0:
+            choice = response.choices[0]
+            if hasattr(choice, 'message') and getattr(choice.message, 'content', None):
+                return choice.message.content.strip()
+            if hasattr(choice, 'text') and choice.text:
+                return choice.text.strip()
+
+        raise Exception("Empty response from Hugging Face chat completion.")
+    except Exception as chat_error:
+        print(f"[WARN] Hugging Face chat completion failed: {chat_error}")
+        try:
+            response = client.text_generation(
+                prompt,
+                max_new_tokens=1024,
+                temperature=0.7
+            )
+
+            if hasattr(response, 'generated_text') and response.generated_text:
+                return response.generated_text.strip()
+            if isinstance(response, str) and response.strip():
+                return response.strip()
+
+            raise Exception("Empty response from Hugging Face text generation.")
+        except Exception as generation_error:
+            print(f"[ERROR] Hugging Face text generation also failed: {generation_error}")
+            raise
 
 
 def call_llm(prompt: str, system_instruction: str = None) -> str:
