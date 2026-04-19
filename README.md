@@ -30,7 +30,52 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
 - **Responsive UI**: Mobile-first design optimized for field use
 - **Docker Deployment**: Containerized for easy setup and scaling
 
-##  Tech Stack
+## 🚀 Deployment on Hugging Face Spaces
+
+### Environment Variables Setup
+
+For Hugging Face Spaces deployment, you need to set these environment variables in your Space settings:
+
+1. Go to your Hugging Face Space → Settings → Variables and secrets
+2. Add the following variables:
+
+#### Required Variables:
+```
+GEMINI_API_KEY=your-gemini-api-key-here
+LLM_PROVIDER=gemini
+```
+
+#### Optional Variables (for Hugging Face models):
+```
+HUGGINGFACE_API_KEY=your-huggingface-api-key-here
+HUGGINGFACE_MODEL=microsoft/DialoGPT-medium
+```
+
+### Space Configuration
+
+- **SDK**: Docker
+- **Dockerfile**: Use the provided `Dockerfile` in the root directory
+- **Hardware**: CPU Basic (Free) or GPU Basic (for faster inference)
+- **Storage**: Persistent storage enabled
+
+### Troubleshooting
+
+If you see "technical difficulties" errors:
+
+1. **Check API Keys**: Ensure `GEMINI_API_KEY` is set in Space variables
+2. **Verify LLM Provider**: Make sure `LLM_PROVIDER=gemini` (Hugging Face models may have rate limits)
+3. **Check Logs**: View Space logs for detailed error messages
+4. **Basic Mode**: The app will work in basic mode with keyword-based responses even without API keys
+
+### Basic Mode Features
+
+When API keys are not configured, KrishiBondhu operates in basic mode with:
+- Keyword-based responses for common crops (rice, wheat, potato)
+- Basic farming advice for diseases and fertilizers
+- Guidance to consult local agricultural services
+- Full UI functionality (chat, image upload, voice recording)
+
+## 🛠 Local Development
 
 ### Frontend
 - **Framework**: React 18 + Vite

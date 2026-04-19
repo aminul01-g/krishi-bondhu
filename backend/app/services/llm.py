@@ -17,7 +17,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-2.5-flash")
 
 # Hugging Face Configuration
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
-HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "google/gemma-4-31B-it")
+HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "microsoft/DialoGPT-medium")
 # Initialize HF Client lazily if key is present
 hf_client = None
 
@@ -41,21 +41,23 @@ def call_huggingface_llm(prompt: str, system_instruction: str = None) -> str:
         if not client:
             raise Exception("Failed to initialize Hugging Face client.")
 
-        # Use chat completion format (messages API)
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-
-        response = client.chat_completion(
-            messages=messages,
-            max_tokens=1024,
-            temperature=0.7
-        )
-
-        if hasattr(response, 'choices') and len(response.choices) > 0:
-            return response.choices[0].message.content.strip()
-
+        # Use conversational API for chat models
+        conversation = {
+            "inputs": {
+                "past_user_inputs": [],
+                "generated_responses": [],
+                "text": prompt
+            }
+        }
+        
+        response = client.conversational(conversation)
+        
+        # Extract the generated response
+        if hasattr(response, 'conversation') and response.conversation:
+            generated_response = response.conversation.get('generated_responses', [])
+            if generated_response:
+                return generated_response[-1]
+        
         raise Exception("Empty response from Hugging Face.")
     except Exception as e:
         print(f"[ERROR] HuggingFace LLM call failed: {e}")
@@ -71,9 +73,44 @@ def call_llm(prompt: str, system_instruction: str = None) -> str:
             print(f"[WARN] Hugging Face failed, trying Gemini fallback: {e}")
             if GEMINI_API_KEY:
                 return call_gemini_llm(prompt, system_instruction)
-            raise
+            else:
+                return get_fallback_response(prompt, system_instruction)
+    elif LLM_PROVIDER == "gemini":
+        try:
+            return call_gemini_llm(prompt, system_instruction)
+        except Exception as e:
+            print(f"[WARN] Gemini failed: {e}")
+            return get_fallback_response(prompt, system_instruction)
     else:
-        return call_gemini_llm(prompt, system_instruction)
+        # Default to Gemini, then fallback
+        try:
+            return call_gemini_llm(prompt, system_instruction)
+        except Exception as e:
+            print(f"[WARN] Default LLM failed: {e}")
+            return get_fallback_response(prompt, system_instruction)
+
+def get_fallback_response(prompt: str, system_instruction: str = None) -> str:
+    """Provide basic fallback responses when LLM is not available"""
+    prompt_lower = prompt.lower()
+    
+    # Basic keyword-based responses for common farming queries
+    if any(word in prompt_lower for word in ['rice', 'paddy', 'dhān']):
+        return "For rice farming: Ensure proper water management, use balanced fertilizers, and watch for pests like stem borers. Plant during monsoon season for best results."
+    
+    elif any(word in prompt_lower for word in ['wheat', 'गेहूं', 'gandum']):
+        return "For wheat: Plant in winter (November-December), ensure good drainage, and protect from rust disease. Use nitrogen-rich fertilizers."
+    
+    elif any(word in prompt_lower for word in ['potato', 'आलू', 'alu']):
+        return "For potatoes: Plant in well-drained soil, provide adequate spacing, and watch for late blight. Harvest when leaves turn yellow."
+    
+    elif any(word in prompt_lower for word in ['disease', 'pest', 'problem', 'sick']):
+        return "For crop diseases: Identify the problem early. Common solutions include proper spacing, crop rotation, organic pesticides, and consulting local agricultural extension services."
+    
+    elif any(word in prompt_lower for word in ['fertilizer', 'খাদ', 'khad']):
+        return "For fertilizers: Use balanced NPK fertilizers based on soil testing. Organic options include compost, vermicompost, and bio-fertilizers. Apply at recommended rates."
+    
+    else:
+        return "I'm currently operating in basic mode without AI services. For farming advice, please consult your local agricultural extension office or use resources from the Department of Agricultural Extension (DAE) in Bangladesh."
 
 def call_gemini_llm(prompt: str, system_instruction: str = None) -> str:
     if not GEMINI_API_KEY:
@@ -189,7 +226,7 @@ def reasoning_node(state):
     except Exception as e:
         print(f"[ERROR] reasoning_node LLM failed: {e}")
         return {
-            "reply_text": "I apologize, but I'm experiencing technical difficulties with the language model. Please check your backend API key configuration.",
+            "reply_text": "I apologize, but I'm experiencing technical difficulties. The system is operating in basic mode with limited responses. Please check your API key configuration for full AI functionality.",
             "tts_path": None
         }
 
