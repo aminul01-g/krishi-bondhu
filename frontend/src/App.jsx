@@ -3,9 +3,8 @@ import Recorder from './components/Recorder'
 import CameraCapture from './components/CameraCapture'
 import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
+import { API_BASE } from './api'
 import './App.css'
-
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('voice') // voice, image, camera, chat

@@ -1,8 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-
-import React, { useState, useRef } from 'react'
-
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
+import { API_BASE } from '../api'
 
 export default function ImageUpload({ onUploadComplete }) {
   const [selectedImage, setSelectedImage] = useState(null)

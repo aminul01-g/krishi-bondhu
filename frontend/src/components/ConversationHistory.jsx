@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api'
+import { API_BASE } from '../api'
 
 export default function ConversationHistory({ conversations, loading, onDelete }) {
   const [deletingId, setDeletingId] = useState(null)
