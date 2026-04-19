@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Form, Depends
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
 from app.farm_agent.langgraph_app import app as langgraph_app
@@ -68,6 +69,23 @@ app.add_middleware(
 )
 
 app.include_router(api_routes.router, prefix="/api")
+
+# Serve frontend static files
+# Note: This should be after the API routes
+if os.path.exists("static"):
+    app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # StaticFiles with html=True handles the root, but for SPA routing
+    # we want to return index.html for unknown paths (except /api)
+    if full_path.startswith("api"):
+         return JSONResponse({"detail": "Not Found"}, status_code=404)
+    
+    index_path = os.path.join("static", "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return JSONResponse({"detail": "Frontend not built"}, status_code=404)
 
 @app.post('/api/upload_audio')
 async def upload_audio(
