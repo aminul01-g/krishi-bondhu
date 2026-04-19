@@ -214,15 +214,18 @@ def transcribe_with_huggingface_whisper(audio_path: str) -> dict:
 
     headers = {
         "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-        "Accept": "application/json",
-        "Content-Type": mime_type
+        "Accept": "application/json"
     }
 
     with open(audio_path, 'rb') as f:
         audio_data = f.read()
 
     print(f"Transcribing with Hugging Face Whisper: {HUGGINGFACE_SPEECH_MODEL}")
-    resp = requests.post(url, headers=headers, data=audio_data)
+    resp = requests.post(
+        url,
+        headers=headers,
+        files={"file": (os.path.basename(audio_path), audio_data, mime_type)}
+    )
     if resp.status_code != 200:
         raise Exception(f"Hugging Face Whisper failed: {resp.status_code} {resp.text}")
 
