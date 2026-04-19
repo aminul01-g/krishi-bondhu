@@ -24,8 +24,8 @@ ENV PIP_DEFAULT_TIMEOUT=100
 WORKDIR $APP_HOME
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
