@@ -19,7 +19,7 @@ gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
 
 # Hugging Face Configuration
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
-HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "mistralai/Mistral-7B-Instruct-v0.3")
+HUGGINGFACE_MODEL = os.getenv("HUGGINGFACE_MODEL", "google/gemma-4-31B-it")
 # Initialize HF Client if key is present
 hf_client = None
 if HUGGINGFACE_API_KEY:
