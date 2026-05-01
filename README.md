@@ -13,6 +13,49 @@ short_description: KrishiBondhu – AI-Powered Farmer Assistant built during BUB
 
 An intelligent agricultural assistant designed specifically for farmers in Bangladesh, providing real-time crop advice, disease diagnosis, and farming guidance in both Bengali and English through voice, text, and image inputs.
 
+## 🏗️ System Architecture & Agent Interaction
+
+```mermaid
+graph TD
+    Farmer([Farmer])
+    ReactPWA[React PWA]
+    FastAPI[FastAPI Backend]
+    IntentRouter[Intent Router Agent]
+    DirectResponse[Direct Response]
+    CrewAIManager[CrewAI Hierarchical Manager]
+    Agronomist[Agronomist Agent]
+    Pathologist[Plant Pathologist Agent]
+    WeatherAgent[Weather Analyst Agent]
+    VisionPipeline[Local HF Vision Pipeline]
+    WeatherData[External Weather Data]
+    Synthesis[Synthesis]
+
+    Farmer -- Text/Voice/Image --> ReactPWA
+    ReactPWA -- POST /api/chat --> FastAPI
+    FastAPI -- IndexedDB Sync / WebSocket --> ReactPWA
+    
+    FastAPI --> IntentRouter
+    IntentRouter -- Simple Query --> DirectResponse
+    IntentRouter -- Complex Query --> CrewAIManager
+    
+    CrewAIManager --> Agronomist
+    CrewAIManager --> Pathologist
+    CrewAIManager --> WeatherAgent
+    
+    Agronomist --> Synthesis
+    
+    Pathologist -- Tool --> VisionPipeline
+    VisionPipeline --> Synthesis
+    Pathologist --> Synthesis
+    
+    WeatherAgent -- Tool --> WeatherData
+    WeatherData --> Synthesis
+    WeatherAgent --> Synthesis
+    
+    Synthesis --> FastAPI
+    FastAPI -- Cached via TTLCache --> FastAPI
+```
+
 ## Features
 
 ### Core Capabilities
