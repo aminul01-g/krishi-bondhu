@@ -4,7 +4,6 @@ route_query_task:
     Determine the primary intent. If it is a simple greeting or basic farming question, answer it directly in the language of the user. If the user provided GPS coordinates {gps} or an image path {image_path}, acknowledge it.
   expected_output: >
     A JSON-formatted string or plain text containing the response to the user.
-  agent: router_agent
 
 disease_diagnosis_task:
   description: >
@@ -13,7 +12,6 @@ disease_diagnosis_task:
     Identify the disease and recommend a treatment plan.
   expected_output: >
     A detailed diagnosis and actionable treatment plan in the user's language.
-  agent: pathologist_agent
 
 agronomy_advice_task:
   description: >
@@ -21,4 +19,3 @@ agronomy_advice_task:
     Consider any provided weather data or location: '{gps}'.
   expected_output: >
     Clear, step-by-step farming advice.
-  agent: agronomist_agent
