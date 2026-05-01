@@ -9,3 +9,4 @@ librosa
 crewai
 crewai-tools
 langchain-huggingface
+transformers
