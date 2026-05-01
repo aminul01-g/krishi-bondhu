@@ -51,8 +51,9 @@ class KrishiCrewOrchestrator:
         route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
         disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
         agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"], agent=agronomist)
+        weather_task = Task(config=self.tasks_config["weather_advice_task"], agent=weather)
         
-        return [route_task, disease_task, agronomy_task]
+        return [route_task, disease_task, agronomy_task, weather_task]
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
         """Create a deterministic cache key based on inputs."""
@@ -86,28 +87,56 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        crew = Crew(
-            agents=list(agents_tuple),
-            tasks=tasks_list,
-            process=Process.sequential,
-            memory=False,
-            verbose=True,
-            step_callback=sync_step_callback
-        )
+        router_agent, agronomist_agent, pathologist_agent, weather_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task = tasks_list
 
-        # 4. Error Handling and Execution
+        import asyncio
+        import json
+
         try:
-            # We rely on LangChain/CrewAI's built-in retries for the LLM layer,
-            # but we catch global execution errors here.
+            # 1. Run the Router ONLY
+            logger.info("Executing Router Agent...")
+            router_crew = Crew(agents=[router_agent], tasks=[route_task], verbose=True, step_callback=sync_step_callback)
             inputs = {
                 "user_input": user_input,
                 "gps": str(gps) if gps else "None",
                 "image_path": str(image_path) if image_path else "None"
             }
-            import asyncio
-            result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
-            final_text = str(result)
+            route_result = await asyncio.to_thread(router_crew.kickoff, inputs=inputs)
+            route_str = str(route_result).replace("```json", "").replace("```", "").strip()
             
+            try:
+                route_data = json.loads(route_str)
+                intent = route_data.get("intent", "agronomy")
+                response_text = route_data.get("router_response", "")
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse router JSON. Raw output: {route_str}")
+                intent = "agronomy"
+                response_text = "I'm having trouble understanding exactly, but let's talk about farming."
+                if "hello" in user_input.lower():
+                    intent = "greeting"
+
+            logger.info(f"Router identified intent: {intent}")
+
+            # 2. Execute target crew based on intent
+            if intent == "greeting":
+                final_text = response_text
+            elif intent == "disease" or (image_path and image_path.lower() != "none"):
+                logger.info("Routing to Pathologist Agent...")
+                disease_crew = Crew(agents=[pathologist_agent], tasks=[disease_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(disease_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "weather":
+                logger.info("Routing to Weather Agent...")
+                weather_crew = Crew(agents=[weather_agent], tasks=[weather_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(weather_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            else:
+                logger.info("Routing to Agronomist Agent...")
+                agronomy_crew = Crew(agents=[agronomist_agent], tasks=[agronomy_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(agronomy_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+
             # Save to Cache
             response_cache[cache_key] = final_text
             logger.info("Crew execution successful. Response cached.")

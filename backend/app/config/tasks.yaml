@@ -1,9 +1,15 @@
 route_query_task:
   description: >
     Review the user's input: '{user_input}'.
-    Determine the primary intent. If it is a simple greeting or basic farming question, answer it directly in the language of the user. If the user provided GPS coordinates {gps} or an image path {image_path}, acknowledge it.
+    Determine the primary intent. You MUST classify the intent into ONE of the following categories:
+    1. 'greeting': A simple greeting or general chat.
+    2. 'disease': The user is asking about a plant disease or providing an image for diagnosis.
+    3. 'weather': The user is asking about weather conditions.
+    4. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
   expected_output: >
-    A JSON-formatted string or plain text containing the response to the user.
+    You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
+    The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
+    Example: {{"intent": "greeting", "router_response": "Hello, how can I help?"}}
 
 disease_diagnosis_task:
   description: >
@@ -19,3 +25,10 @@ agronomy_advice_task:
     Consider any provided weather data or location: '{gps}'.
   expected_output: >
     Clear, step-by-step farming advice.
+
+weather_advice_task:
+  description: >
+    Analyze the weather for the user's location: '{gps}'.
+    Consider the user's query: '{user_input}'.
+  expected_output: >
+    Provide actionable weather advice for farming in the user's language.

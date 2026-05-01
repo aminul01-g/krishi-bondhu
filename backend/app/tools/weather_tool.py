@@ -5,7 +5,7 @@ class WeatherLookupTool(BaseTool):
     name: str = "Weather and GPS Lookup Tool"
     description: str = "Fetches local weather and environmental data based on GPS coordinates."
     
-    def _run(self, gps_coordinates: str) -> str:
+    def _run(self, gps_coordinates: str, **kwargs) -> str:
         if not gps_coordinates or gps_coordinates.lower() == "none":
             return "No GPS coordinates provided. Assuming general tropical climate for Bangladesh."
             
