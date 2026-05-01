@@ -2,7 +2,7 @@ import os
 import logging
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
-from langchain_huggingface import HuggingFacePipeline, ChatHuggingFace
+from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
 
 logger = logging.getLogger("ModelConfig")
 
@@ -74,9 +74,8 @@ class ModelRegistry:
             
         pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=512)
         llm = HuggingFacePipeline(pipeline=pipe)
-        chat_model = ChatHuggingFace(llm=llm)
-        self._loaded_models["agronomist"] = chat_model
-        return chat_model
+        self._loaded_models["agronomist"] = llm
+        return llm
 
     def get_disease_vision_model(self):
         """Loads the PlantNet disease classification pipeline."""
@@ -112,9 +111,8 @@ class ModelRegistry:
         )
         pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, max_new_tokens=256)
         llm = HuggingFacePipeline(pipeline=pipe)
-        chat_model = ChatHuggingFace(llm=llm)
-        self._loaded_models["interpreter"] = chat_model
-        return chat_model
+        self._loaded_models["interpreter"] = llm
+        return llm
 
     def get_stt_model(self):
         """Loads Whisper ASR for Bengali."""
