@@ -3,6 +3,7 @@ import logging
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
 from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+from langchain_groq import ChatGroq
 
 logger = logging.getLogger("ModelConfig")
 
@@ -44,6 +45,12 @@ class ModelRegistry:
 
     def get_agronomist_llm(self):
         """Loads the Agronomist LLM wrapped as a LangChain LLM for CrewAI."""
+        if os.getenv("GROQ_API_KEY"):
+            logger.info("GROQ_API_KEY detected. Loading ChatGroq for blazing fast inference.")
+            if "agronomist" not in self._loaded_models:
+                self._loaded_models["agronomist"] = ChatGroq(model_name="llama3-70b-8192", temperature=0.7)
+            return self._loaded_models["agronomist"]
+
         model_id = self.MODELS["agronomist"]["primary"]
         fallback_id = self.MODELS["agronomist"]["fallback"]
         
@@ -97,6 +104,12 @@ class ModelRegistry:
 
     def get_interpreter_llm(self):
         """Loads TigerLLM for Bengali NLP."""
+        if os.getenv("GROQ_API_KEY"):
+            logger.info("GROQ_API_KEY detected. Loading ChatGroq for interpreter.")
+            if "interpreter" not in self._loaded_models:
+                self._loaded_models["interpreter"] = ChatGroq(model_name="llama3-8b-8192", temperature=0.1)
+            return self._loaded_models["interpreter"]
+
         model_id = self.MODELS["multimodal_interpreter"]["primary"]
         
         if "interpreter" in self._loaded_models:
