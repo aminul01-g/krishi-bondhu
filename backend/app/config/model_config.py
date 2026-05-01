@@ -50,7 +50,7 @@ class ModelRegistry:
             os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for blazing fast inference.")
             if "agronomist" not in self._loaded_models:
-                self._loaded_models["agronomist"] = ChatGroq(model_name="llama3-70b-8192", temperature=0.7)
+                self._loaded_models["agronomist"] = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
             return self._loaded_models["agronomist"]
 
         model_id = self.MODELS["agronomist"]["primary"]
@@ -111,7 +111,7 @@ class ModelRegistry:
             os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for interpreter.")
             if "interpreter" not in self._loaded_models:
-                self._loaded_models["interpreter"] = ChatGroq(model_name="llama3-8b-8192", temperature=0.1)
+                self._loaded_models["interpreter"] = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.1)
             return self._loaded_models["interpreter"]
 
         model_id = self.MODELS["multimodal_interpreter"]["primary"]
