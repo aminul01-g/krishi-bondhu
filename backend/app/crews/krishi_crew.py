@@ -89,8 +89,7 @@ class KrishiCrewOrchestrator:
         crew = Crew(
             agents=list(agents_tuple),
             tasks=tasks_list,
-            process=Process.hierarchical,
-            manager_llm=self.manager_llm,
+            process=Process.sequential,
             memory=True,
             verbose=True,
             step_callback=sync_step_callback
