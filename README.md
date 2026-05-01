@@ -68,7 +68,7 @@ graph TD
 
 ### Technical Features
 - **Progressive Web App (PWA)**: Installable on mobile/desktop with offline capabilities
-- **Multi-LLM Support**: Switch between Google Gemini and Hugging Face models
+- **Multi-Agent Engine**: CrewAI hierarchical process using specialized local Hugging Face models
 - **Real-time GPS**: Automatic location detection for localized advice
 - **Responsive UI**: Mobile-first design optimized for field use
 - **Docker Deployment**: Containerized for easy setup and scaling
@@ -128,18 +128,17 @@ When API keys are not configured, KrishiBondhu operates in basic mode with:
 
 ### Backend
 - **Framework**: FastAPI (Python)
-- **Workflow Engine**: LangGraph for multi-step reasoning
+- **Workflow Engine**: CrewAI for multi-agent reasoning
 - **Database**: PostgreSQL with AsyncPG
 - **ORM**: SQLAlchemy 2.0 (Async)
 - **Migrations**: Alembic
 
 ### AI Services
 - **LLM Providers**:
-  - Google Gemini API (gemini-2.5-flash)
-  - Hugging Face Inference API (meta-llama/Llama-3.2-3B-Instruct)
-- **Speech-to-Text**: Google Gemini Audio API
+  - Local Hugging Face Models (BitsAndBytes 4-bit Quantization)
+- **Speech-to-Text**: `mozilla-ai/whisper-large-v3-bn` (Local 16kHz inference)
 - **Text-to-Speech**: Google TTS (gTTS)
-- **Vision**: Google Gemini Vision API
+- **Vision**: `prof-freakenstein/plantnet-disease-detection` (Local HF pipeline)
 
 ### Infrastructure
 - **Container**: Docker + Docker Compose
@@ -166,17 +165,16 @@ cd krishi-bondhu
 Create a `.env` file in the root directory:
 
 ```bash
-# LLM Configuration
-LLM_PROVIDER=huggingface          # or 'gemini'
-GEMINI_API_KEY=your_gemini_key_here
-HUGGINGFACE_API_KEY=your_hf_key_here
-HUGGINGFACE_MODEL=meta-llama/Llama-3.2-3B-Instruct
+# Agent Model Configuration
+HF_TOKEN=your_huggingface_key_here
+PRIMARY_LLM_ID=AI71ai/Llama-agrillm-3.3-70B
+FALLBACK_LLM_ID=FN-LLM-2B
+INTERPRETER_LLM_ID=Tiger-Research/TigerLLM-1B
 
 # Database
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/farmdb
 
 # Services
-STT_PROVIDER=gemini
 TTS_PROVIDER=gtts
 
 # Application
