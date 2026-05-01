@@ -3,6 +3,9 @@ import Recorder from './components/Recorder'
 import CameraCapture from './components/CameraCapture'
 import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
+import MarketIntelligence from './components/MarketIntelligence'
+import FarmDiary from './components/FarmDiary'
+import DailyTips from './components/DailyTips'
 import { API_BASE } from './api'
 import { useAgentSocket } from './hooks/useAgentSocket'
 import { flushQueue } from './services/offlineQueue'
@@ -66,7 +69,10 @@ export default function App() {
   const tabs = [
     { id: 'voice', label: '🎤 Voice', icon: '🎤' },
     { id: 'camera', label: '📹 Camera', icon: '📹' },
-    { id: 'chat', label: '💬 Chat', icon: '💬' }
+    { id: 'chat', label: '💬 Chat', icon: '💬' },
+    { id: 'market', label: '📈 Market', icon: '📈' },
+    { id: 'diary', label: '📒 Diary', icon: '📒' },
+    { id: 'tips', label: '💡 Tips', icon: '💡' }
   ]
 
   return (
@@ -140,6 +146,10 @@ export default function App() {
                     <Chatbot onMessageComplete={handleNewConversation} />
                   </>
                 )}
+
+                {activeTab === 'market' && <MarketIntelligence />}
+                {activeTab === 'diary' && <FarmDiary />}
+                {activeTab === 'tips' && <DailyTips />}
               </div>
             </section>
 
