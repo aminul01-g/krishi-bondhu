@@ -32,3 +32,13 @@ class FarmDiary(Base):
     notes = Column(Text, nullable=True)
     crop = Column(String, nullable=True)
     plot = Column(String, nullable=True)
+
+class CuratedTip(Base):
+    __tablename__ = "curated_tips"
+    id = Column(Integer, primary_key=True, index=True)
+    crop = Column(String, index=True, nullable=False)
+    growth_stage_days_start = Column(Integer, nullable=False)
+    growth_stage_days_end = Column(Integer, nullable=False)
+    category = Column(String, nullable=True)  # 'pest', 'fertilizer', 'general'
+    tip_text_bn = Column(Text, nullable=False)
+    audio_url = Column(String, nullable=True)

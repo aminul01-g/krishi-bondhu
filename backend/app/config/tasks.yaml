@@ -7,7 +7,8 @@ route_query_task:
     3. 'weather': The user is asking about weather conditions.
     4. 'market': The user is asking about crop prices, market rates, or where to sell.
     5. 'diary': The user is logging an expense, income, or harvest yield.
-    6. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
+    6. 'alerts': The user is asking for their daily tip, pest risk, or current alerts.
+    7. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
   expected_output: >
     You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
     The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
@@ -57,3 +58,11 @@ farm_diary_task:
     If they are asking for a report, summarize their data.
   expected_output: >
     Return ONLY a raw JSON object containing the extracted fields. Do not include markdown ticks.
+
+alert_advice_task:
+  description: >
+    Review the user's input: '{user_input}' and their location/weather data: '{gps}'.
+    Extract the crop they are asking about. Use your pest risk tool to determine if there are any immediate dangers based on the weather.
+    Format your response in the user's language, providing a clear color-coded risk (Green/Yellow/Red) and actionable advice.
+  expected_output: >
+    A clear summary of pest/disease risks and a daily tip.

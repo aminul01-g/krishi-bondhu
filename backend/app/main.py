@@ -16,6 +16,7 @@ from app.services.audio import stt_node
 from app.api import routes as api_routes
 from app.api.endpoints import market as market_routes
 from app.api.endpoints import diary as diary_routes
+from app.api.endpoints import alerts as alerts_routes
 from app.db import get_db, engine, DATABASE_URL
 from app.models.db_models import Base
 
@@ -88,6 +89,27 @@ async def create_database_tables():
 app.include_router(api_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api/market", tags=["market"])
 app.include_router(diary_routes.router, prefix="/api/diary", tags=["diary"])
+app.include_router(alerts_routes.router, prefix="/api/alerts", tags=["alerts"])
+
+# --- APScheduler Setup ---
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+scheduler = AsyncIOScheduler()
+
+def daily_notification_job():
+    # In a real app, this would iterate through users, calculate their pest risk, and push an FCM/WebSocket notification.
+    print("[SCHEDULER] Running daily pest risk and tip notification job...")
+
+@app.on_event("startup")
+async def start_scheduler():
+    scheduler.add_job(daily_notification_job, 'cron', hour=8, minute=0)
+    scheduler.start()
+    print("[SCHEDULER] Started.")
+
+@app.on_event("shutdown")
+async def stop_scheduler():
+    scheduler.shutdown()
+    print("[SCHEDULER] Stopped.")
 
 # --- WebSocket Setup for Agent Status ---
 from typing import List

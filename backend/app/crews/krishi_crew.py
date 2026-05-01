@@ -8,6 +8,7 @@ from app.config.model_config import model_registry
 from app.tools.vision_tool import LocalVisionDiseaseTool
 from app.tools.weather_tool import WeatherLookupTool
 from app.tools.market_tool import MarketPriceTool
+from app.tools.alert_tool import PestRiskTool
 
 # 1. Setup Structured Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -32,6 +33,7 @@ class KrishiCrewOrchestrator:
         self.vision_tool = LocalVisionDiseaseTool()
         self.weather_tool = WeatherLookupTool()
         self.market_tool = MarketPriceTool()
+        self.alert_tool = PestRiskTool()
         
         logger.info("KrishiCrewOrchestrator initialized with memory and caching.")
 
@@ -47,10 +49,11 @@ class KrishiCrewOrchestrator:
         weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], allow_delegation=False, verbose=True)
         market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=agronomist_llm, tools=[self.market_tool], allow_delegation=False, verbose=True)
         farm_manager_agent = Agent(config=self.agents_config["farm_manager_agent"], llm=interpreter_llm, allow_delegation=False, verbose=True)
-        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent
+        alert_advisor_agent = Agent(config=self.agents_config["alert_advisor_agent"], llm=agronomist_llm, tools=[self.alert_tool], allow_delegation=False, verbose=True)
+        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent
 
     def _create_tasks(self, agents):
-        router, agronomist, pathologist, weather, market, farm_manager = agents
+        router, agronomist, pathologist, weather, market, farm_manager, alert_advisor = agents
         
         route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
         disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
@@ -58,8 +61,9 @@ class KrishiCrewOrchestrator:
         weather_task = Task(config=self.tasks_config["weather_advice_task"], agent=weather)
         market_task = Task(config=self.tasks_config["market_advice_task"], agent=market)
         diary_task = Task(config=self.tasks_config["farm_diary_task"], agent=farm_manager)
+        alert_task = Task(config=self.tasks_config["alert_advice_task"], agent=alert_advisor)
         
-        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task]
+        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task]
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
         """Create a deterministic cache key based on inputs."""
@@ -93,8 +97,8 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent = agents_tuple
-        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task = tasks_list
+        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task = tasks_list
 
         import asyncio
         import json
@@ -148,6 +152,11 @@ class KrishiCrewOrchestrator:
                 result = await asyncio.to_thread(diary_crew.kickoff, inputs=inputs)
                 # The result here should be raw JSON from the agent, we just pass it along
                 final_text = str(result).replace("```json", "").replace("```", "").strip()
+            elif intent == "alerts":
+                logger.info("Routing to Alert Advisor Agent...")
+                alert_crew = Crew(agents=[alert_advisor_agent], tasks=[alert_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(alert_crew.kickoff, inputs=inputs)
+                final_text = str(result)
             else:
                 logger.info("Routing to Agronomist Agent...")
                 agronomy_crew = Crew(agents=[agronomist_agent], tasks=[agronomy_task], verbose=True, step_callback=sync_step_callback)
