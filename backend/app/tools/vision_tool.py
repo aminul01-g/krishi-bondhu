@@ -11,7 +11,7 @@ class LocalVisionDiseaseTool(BaseTool):
     
     # In a production environment, you would load this model once in the factory or app startup.
     # We initialize it here for demonstration.
-    def _run(self, image_path: str) -> str:
+    def _run(self, image_path: str, **kwargs) -> str:
         if not image_path or image_path.lower() == "none" or not os.path.exists(image_path):
             return "No valid image provided to analyze."
             
