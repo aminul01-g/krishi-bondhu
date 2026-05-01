@@ -105,7 +105,8 @@ class KrishiCrewOrchestrator:
                 "gps": str(gps) if gps else "None",
                 "image_path": str(image_path) if image_path else "None"
             }
-            result = await crew.kickoff_async(inputs=inputs)
+            import asyncio
+            result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
             final_text = str(result)
             
             # Save to Cache
