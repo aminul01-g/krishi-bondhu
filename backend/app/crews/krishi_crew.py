@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import yaml
 from cachetools import TTLCache
 from crewai import Agent, Task, Crew, Process
 from app.config.model_config import model_registry
@@ -19,8 +20,10 @@ class KrishiCrewOrchestrator:
     def __init__(self):
         # Configuration is now in backend/app/config
         self.config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config')
-        self.agents_config = os.path.join(self.config_dir, 'agents.yaml')
-        self.tasks_config = os.path.join(self.config_dir, 'tasks.yaml')
+        with open(os.path.join(self.config_dir, 'agents.yaml'), 'r', encoding='utf-8') as f:
+            self.agents_config = yaml.safe_load(f)
+        with open(os.path.join(self.config_dir, 'tasks.yaml'), 'r', encoding='utf-8') as f:
+            self.tasks_config = yaml.safe_load(f)
         # The main manager LLM is the interpreter (fast)
         self.manager_llm = model_registry.get_interpreter_llm()
         
@@ -36,24 +39,18 @@ class KrishiCrewOrchestrator:
         # Agronomist uses the heavy 70B (or 2B fallback)
         agronomist_llm = model_registry.get_agronomist_llm()
         
-        router_agent = Agent(config=self.agents_config, role="router_agent", llm=interpreter_llm, verbose=True)
-        agronomist_agent = Agent(config=self.agents_config, role="agronomist_agent", llm=agronomist_llm, verbose=True)
-        pathologist_agent = Agent(config=self.agents_config, role="pathologist_agent", llm=interpreter_llm, tools=[self.vision_tool], verbose=True)
-        weather_agent = Agent(config=self.agents_config, role="weather_analyst_agent", llm=interpreter_llm, tools=[self.weather_tool], verbose=True)
+        router_agent = Agent(config=self.agents_config["router_agent"], llm=interpreter_llm, verbose=True)
+        agronomist_agent = Agent(config=self.agents_config["agronomist_agent"], llm=agronomist_llm, verbose=True)
+        pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], verbose=True)
+        weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], verbose=True)
         return router_agent, agronomist_agent, pathologist_agent, weather_agent
 
-    def _create_tasks(self, agents, user_input: str, gps: dict, image_path: str):
+    def _create_tasks(self, agents):
         router, agronomist, pathologist, weather = agents
         
-        inputs = {
-            "user_input": user_input,
-            "gps": str(gps) if gps else "None",
-            "image_path": str(image_path) if image_path else "None"
-        }
-        
-        route_task = Task(config=self.tasks_config, name="route_query_task", agent=router, inputs=inputs)
-        disease_task = Task(config=self.tasks_config, name="disease_diagnosis_task", agent=pathologist, inputs=inputs)
-        agronomy_task = Task(config=self.tasks_config, name="agronomy_advice_task", agent=agronomist, inputs=inputs)
+        route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
+        disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
+        agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"], agent=agronomist)
         
         return [route_task, disease_task, agronomy_task]
 
@@ -87,7 +84,7 @@ class KrishiCrewOrchestrator:
         logger.info(f"Processing new request: {user_input[:50]}")
         
         agents_tuple = self._create_agents()
-        tasks_list = self._create_tasks(agents_tuple, user_input, gps, image_path)
+        tasks_list = self._create_tasks(agents_tuple)
 
         crew = Crew(
             agents=list(agents_tuple),
@@ -103,7 +100,12 @@ class KrishiCrewOrchestrator:
         try:
             # We rely on LangChain/CrewAI's built-in retries for the LLM layer,
             # but we catch global execution errors here.
-            result = await crew.kickoff_async()
+            inputs = {
+                "user_input": user_input,
+                "gps": str(gps) if gps else "None",
+                "image_path": str(image_path) if image_path else "None"
+            }
+            result = await crew.kickoff_async(inputs=inputs)
             final_text = str(result)
             
             # Save to Cache
