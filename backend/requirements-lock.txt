@@ -2,6 +2,8 @@
 #    uv pip compile backend/pyproject.toml
 accelerate==1.13.0
     # via krishibondhu-backend (backend/pyproject.toml)
+aiofiles==25.1.0
+    # via krishibondhu-backend (backend/pyproject.toml)
 aiohappyeyeballs==2.6.1
     # via aiohttp
 aiohttp==3.13.5
