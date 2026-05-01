@@ -9,6 +9,7 @@ logger = logging.getLogger("ModelConfig")
 class ModelRegistry:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.is_basic_space = os.getenv("SPACE_HARDWARE", "").startswith("cpu") or not torch.cuda.is_available()
         
         # 4-bit Quantization Config for heavy LLMs (requires bitsandbytes)
         self.bnb_config = BitsAndBytesConfig(
@@ -18,22 +19,22 @@ class ModelRegistry:
             bnb_4bit_quant_type="nf4"
         )
         
-        # Model IDs
+        # Model IDs mapped to environment variables with hardcoded defaults
         self.MODELS = {
             "agronomist": {
-                "primary": "AI71ai/Llama-agrillm-3.3-70B",
-                "fallback": "FN-LLM-2B"
+                "primary": os.getenv("PRIMARY_LLM_ID", "AI71ai/Llama-agrillm-3.3-70B"),
+                "fallback": os.getenv("FALLBACK_LLM_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
             },
             "disease_vision": {
-                "primary": "prof-freakenstein/plantnet-disease-detection",
+                "primary": os.getenv("VISION_MODEL_ID", "prof-freakenstein/plantnet-disease-detection"),
                 "fallback": "wambugu71/crop_leaf_diseases_vit"
             },
             "multimodal_interpreter": {
-                "primary": "md-nishat-008/TigerLLM-1B-it",
-                "fallback": "BanglaLLM/BanglaLLama-3.2-3b-unlop-culturax-base-v0.0.3"
+                "primary": os.getenv("INTERPRETER_LLM_ID", "md-nishat-008/TigerLLM-1B-it"),
+                "fallback": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
             },
             "voice_stt": {
-                "primary": "mozilla-ai/whisper-large-v3-bn",
+                "primary": os.getenv("STT_MODEL_ID", "mozilla-ai/whisper-large-v3-bn"),
                 "fallback": "shhossain/whisper-tiny-bn"
             }
         }
@@ -46,23 +47,28 @@ class ModelRegistry:
         model_id = self.MODELS["agronomist"]["primary"]
         fallback_id = self.MODELS["agronomist"]["fallback"]
         
+        # Hardware awareness: Prevent 70B models from crashing CPU spaces
+        if self.is_basic_space and ("70B" in model_id or "70b" in model_id.lower()):
+            logger.warning(f"Hardware limitation detected. Forcing fallback from {model_id} to {fallback_id} to prevent disk/OOM crash.")
+            model_id = fallback_id
+
         if "agronomist" in self._loaded_models:
             return self._loaded_models["agronomist"]
             
         try:
-            logger.info(f"Attempting to load {model_id} with 4-bit quantization...")
+            logger.info(f"Attempting to load {model_id}...")
             tokenizer = AutoTokenizer.from_pretrained(model_id)
-            model = AutoModelForCausalLM.from_pretrained(
-                model_id, 
-                quantization_config=self.bnb_config,
-                device_map="auto"
-            )
+            # Only use quantization if CUDA is available, otherwise bitsandbytes will crash
+            if self.device == "cuda":
+                model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=self.bnb_config, device_map="auto")
+            else:
+                model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cpu", torch_dtype=torch.float32)
         except Exception as e:
             logger.warning(f"Failed to load {model_id}: {e}. Falling back to {fallback_id}")
             tokenizer = AutoTokenizer.from_pretrained(fallback_id)
             model = AutoModelForCausalLM.from_pretrained(
                 fallback_id, 
-                device_map="auto",
+                device_map="cpu" if self.device == "cpu" else "auto",
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
             )
             
@@ -111,7 +117,12 @@ class ModelRegistry:
     def get_stt_model(self):
         """Loads Whisper ASR for Bengali."""
         model_id = self.MODELS["voice_stt"]["primary"]
+        fallback_id = self.MODELS["voice_stt"]["fallback"]
         
+        if self.is_basic_space and "large" in model_id.lower():
+            logger.warning(f"Hardware limitation detected. Forcing fallback from {model_id} to {fallback_id} to prevent disk/OOM crash.")
+            model_id = fallback_id
+            
         if "stt" in self._loaded_models:
             return self._loaded_models["stt"]
             
@@ -119,8 +130,7 @@ class ModelRegistry:
         try:
             pipe = pipeline("automatic-speech-recognition", model=model_id, device=0 if self.device == "cuda" else -1)
         except Exception:
-            fallback_id = self.MODELS["voice_stt"]["fallback"]
-            logger.warning(f"Failed to load Whisper Large. Falling back to {fallback_id}")
+            logger.warning(f"Failed to load {model_id}. Falling back to {fallback_id}")
             pipe = pipeline("automatic-speech-recognition", model=fallback_id, device=0 if self.device == "cuda" else -1)
             
         self._loaded_models["stt"] = pipe
