@@ -46,18 +46,20 @@ class KrishiCrewOrchestrator:
         pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], allow_delegation=False, verbose=True)
         weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], allow_delegation=False, verbose=True)
         market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=agronomist_llm, tools=[self.market_tool], allow_delegation=False, verbose=True)
-        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent
+        farm_manager_agent = Agent(config=self.agents_config["farm_manager_agent"], llm=interpreter_llm, allow_delegation=False, verbose=True)
+        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent
 
     def _create_tasks(self, agents):
-        router, agronomist, pathologist, weather, market = agents
+        router, agronomist, pathologist, weather, market, farm_manager = agents
         
         route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
         disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
         agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"], agent=agronomist)
         weather_task = Task(config=self.tasks_config["weather_advice_task"], agent=weather)
         market_task = Task(config=self.tasks_config["market_advice_task"], agent=market)
+        diary_task = Task(config=self.tasks_config["farm_diary_task"], agent=farm_manager)
         
-        return [route_task, disease_task, agronomy_task, weather_task, market_task]
+        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task]
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
         """Create a deterministic cache key based on inputs."""
@@ -91,8 +93,8 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent = agents_tuple
-        route_task, disease_task, agronomy_task, weather_task, market_task = tasks_list
+        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task = tasks_list
 
         import asyncio
         import json
@@ -140,6 +142,12 @@ class KrishiCrewOrchestrator:
                 market_crew = Crew(agents=[market_agent], tasks=[market_task], verbose=True, step_callback=sync_step_callback)
                 result = await asyncio.to_thread(market_crew.kickoff, inputs=inputs)
                 final_text = str(result)
+            elif intent == "diary":
+                logger.info("Routing to Farm Manager Agent (Diary)...")
+                diary_crew = Crew(agents=[farm_manager_agent], tasks=[diary_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(diary_crew.kickoff, inputs=inputs)
+                # The result here should be raw JSON from the agent, we just pass it along
+                final_text = str(result).replace("```json", "").replace("```", "").strip()
             else:
                 logger.info("Routing to Agronomist Agent...")
                 agronomy_crew = Crew(agents=[agronomist_agent], tasks=[agronomy_task], verbose=True, step_callback=sync_step_callback)

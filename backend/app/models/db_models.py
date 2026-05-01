@@ -19,3 +19,16 @@ class Conversation(Base):
     confidence = Column(Float, nullable=True)  # Added in migration 0002
     meta_data = Column(JSON, nullable=True)  # Renamed from 'metadata' to avoid SQLAlchemy conflict
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class FarmDiary(Base):
+    __tablename__ = "farm_diary"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False) # Store external_id for easy query
+    date = Column(DateTime(timezone=True), server_default=func.now())
+    entry_type = Column(String, nullable=False)  # 'expense', 'income', 'yield'
+    category = Column(String, nullable=True)  # e.g., 'fertilizer', 'labor', 'sales'
+    amount = Column(Float, nullable=False)
+    unit = Column(String, nullable=True)  # 'BDT', 'kg', 'mon'
+    notes = Column(Text, nullable=True)
+    crop = Column(String, nullable=True)
+    plot = Column(String, nullable=True)

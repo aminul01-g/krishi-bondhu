@@ -15,6 +15,7 @@ from app.api.utils import save_audio_local, save_image_local
 from app.services.audio import stt_node
 from app.api import routes as api_routes
 from app.api.endpoints import market as market_routes
+from app.api.endpoints import diary as diary_routes
 from app.db import get_db, engine, DATABASE_URL
 from app.models.db_models import Base
 
@@ -86,6 +87,7 @@ async def create_database_tables():
 
 app.include_router(api_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api/market", tags=["market"])
+app.include_router(diary_routes.router, prefix="/api/diary", tags=["diary"])
 
 # --- WebSocket Setup for Agent Status ---
 from typing import List

@@ -6,7 +6,8 @@ route_query_task:
     2. 'disease': The user is asking about a plant disease or providing an image for diagnosis.
     3. 'weather': The user is asking about weather conditions.
     4. 'market': The user is asking about crop prices, market rates, or where to sell.
-    5. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
+    5. 'diary': The user is logging an expense, income, or harvest yield.
+    6. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
   expected_output: >
     You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
     The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
@@ -41,3 +42,18 @@ market_advice_task:
     Format your response in the user's language, emphasizing whether they should hold or sell.
   expected_output: >
     A clear summary of market prices, predictions, and selling advice.
+
+farm_diary_task:
+  description: >
+    Analyze the user's input: '{user_input}'.
+    If they are logging a transaction (e.g., spent 500 BDT on fertilizer), extract the details into a strict JSON format.
+    The JSON must contain:
+    - 'entry_type' (must be one of: 'expense', 'income', 'yield')
+    - 'amount' (number)
+    - 'category' (string, e.g., 'fertilizer', 'labor', 'sales')
+    - 'unit' (string, e.g., 'BDT', 'kg')
+    - 'notes' (string, a brief summary in English)
+    
+    If they are asking for a report, summarize their data.
+  expected_output: >
+    Return ONLY a raw JSON object containing the extracted fields. Do not include markdown ticks.
