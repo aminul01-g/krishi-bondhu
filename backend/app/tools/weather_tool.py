@@ -1,4 +1,4 @@
-from crewai.tools import BaseTool
+from langchain.tools import BaseTool
 from pydantic import Field
 
 class WeatherLookupTool(BaseTool):
