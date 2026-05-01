@@ -4,6 +4,8 @@ import CameraCapture from './components/CameraCapture'
 import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
 import { API_BASE } from './api'
+import { useAgentSocket } from './hooks/useAgentSocket'
+import { flushQueue } from './services/offlineQueue'
 import './App.css'
 
 export default function App() {
@@ -11,6 +13,11 @@ export default function App() {
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+
+  // Use the WebSocket hook (assuming backend runs on localhost:8000/api/ws/agent_status or dynamically based on API_BASE)
+  const wsUrl = API_BASE.replace('http', 'ws') + '/ws/agent_status'
+  const { status: agentStatus, isConnected } = useAgentSocket(wsUrl)
 
   const fetchConversations = async () => {
     try {
@@ -32,7 +39,23 @@ export default function App() {
     fetchConversations()
     // Refresh conversations every 10 seconds
     const interval = setInterval(fetchConversations, 10000)
-    return () => clearInterval(interval)
+    
+    // Offline status listeners
+    const handleOnline = () => {
+      setIsOffline(false)
+      flushQueue() // Flush IndexedDB when back online
+      fetchConversations()
+    }
+    const handleOffline = () => setIsOffline(true)
+    
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
   }, [])
 
   const handleNewConversation = () => {
@@ -52,6 +75,14 @@ export default function App() {
         <div className="header-content">
           <h1>🌾 KrishiBondhu</h1>
           <p className="subtitle">Your intelligent farming assistant - Ask questions, share images, or chat anytime!</p>
+          
+          {/* Agent Status Indicator */}
+          <div className="status-indicators">
+             <span className={`ws-status ${isConnected ? 'connected' : 'disconnected'}`}>
+               {isConnected ? `🟢 Connected: ${agentStatus}` : '🔴 Reconnecting...'}
+             </span>
+             {isOffline && <span className="offline-banner">⚠️ Offline Mode. Data will sync when connected.</span>}
+          </div>
         </div>
       </header>
 

@@ -1,0 +1,24 @@
+route_query_task:
+  description: >
+    Review the user's input: '{user_input}'.
+    Determine the primary intent. If it is a simple greeting or basic farming question, answer it directly in the language of the user. If the user provided GPS coordinates {gps} or an image path {image_path}, acknowledge it.
+  expected_output: >
+    A JSON-formatted string or plain text containing the response to the user.
+  agent: router_agent
+
+disease_diagnosis_task:
+  description: >
+    The user has uploaded an image of a crop at the path: '{image_path}'.
+    Use your vision tools to analyze the image. Consider the user's input: '{user_input}'.
+    Identify the disease and recommend a treatment plan.
+  expected_output: >
+    A detailed diagnosis and actionable treatment plan in the user's language.
+  agent: pathologist_agent
+
+agronomy_advice_task:
+  description: >
+    Provide general farming advice for the user's query: '{user_input}'.
+    Consider any provided weather data or location: '{gps}'.
+  expected_output: >
+    Clear, step-by-step farming advice.
+  agent: agronomist_agent

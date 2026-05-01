@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { API_BASE } from '../api'
+import { saveToQueue } from '../services/offlineQueue'
 
 export default function Recorder({ onConversationComplete }) {
   const [recording, setRecording] = useState(false)
@@ -88,6 +89,25 @@ export default function Recorder({ onConversationComplete }) {
         // Add image if selected
         if (selectedImage) {
           fd.append('image', selectedImage)
+        }
+
+        if (!navigator.onLine) {
+          try {
+            await saveToQueue(`${API_BASE}/upload_audio`, fd)
+            setResponse({
+              reply_text: 'You are currently offline. Your audio question has been saved and will be answered automatically when you reconnect.'
+            })
+          } catch (err) {
+            console.error('Failed to queue offline audio', err)
+            setError('Sorry, your device is offline and we failed to save the audio locally. Please try again when online.')
+          } finally {
+            setProcessing(false)
+            setSelectedImage(null)
+            setImagePreview(null)
+            if (imageInputRef.current) imageInputRef.current.value = ''
+            stream.getTracks().forEach(track => track.stop())
+          }
+          return
         }
 
         try {

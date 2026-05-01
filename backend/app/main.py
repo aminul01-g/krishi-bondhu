@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form, Depends
+from fastapi import FastAPI, File, UploadFile, Form, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
 
-from app.farm_agent.langgraph_app import app as langgraph_app
+from app.crews.krishi_crew import KrishiCrewOrchestrator
+langgraph_app = KrishiCrewOrchestrator()
 from app.api.utils import save_audio_local, save_image_local
 from app.services.audio import stt_node
 from app.api import routes as api_routes
@@ -84,6 +85,37 @@ async def create_database_tables():
 
 app.include_router(api_routes.router, prefix="/api")
 
+# --- WebSocket Setup for Agent Status ---
+from typing import List
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            await connection.send_json(message)
+
+ws_manager = ConnectionManager()
+
+@app.websocket("/api/ws/agent_status")
+async def websocket_endpoint(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection open and wait for messages (e.g., ping)
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+# ----------------------------------------
+
 @app.post('/api/upload_audio')
 async def upload_audio(
     file: UploadFile = File(...), 
@@ -130,8 +162,11 @@ async def upload_audio(
     initial_state["language"] = language
 
     try:
-        # Use ainvoke for async nodes (respond_node is async)
-        result = await langgraph_app.ainvoke(initial_state)
+        # Pass the websocket broadcast as the status callback to stream agent thoughts
+        result = await langgraph_app.ainvoke(
+            initial_state, 
+            status_callback=ws_manager.broadcast
+        )
         # Ensure we always have a reply_text
         if not result.get("reply_text"):
              result["reply_text"] = "I processed your audio but couldn't generate a response. Please try again."

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { API_BASE } from '../api'
+import { saveToQueue } from '../services/offlineQueue'
 
 export default function Chatbot({ onMessageComplete }) {
   const [messages, setMessages] = useState([
@@ -99,6 +100,28 @@ export default function Chatbot({ onMessageComplete }) {
     if (gps.lat && gps.lon) {
       fd.append('lat', gps.lat)
       fd.append('lon', gps.lon)
+    }
+
+    if (!navigator.onLine) {
+      try {
+        await saveToQueue(`${API_BASE}/chat`, fd)
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'You are currently offline. Your message has been saved and will be answered automatically when you reconnect.'
+        }])
+      } catch (err) {
+        console.error('Failed to queue offline message', err)
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Sorry, your device is offline and we failed to save the message locally. Please try again when online.'
+        }])
+      } finally {
+        setProcessing(false)
+        setSelectedImage(null)
+        setImagePreview(null)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+      return
     }
 
     try {

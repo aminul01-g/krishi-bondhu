@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { API_BASE } from '../api'
+import { saveToQueue } from '../services/offlineQueue'
 
 export default function CameraCapture({ onCaptureComplete }) {
   const [stream, setStream] = useState(null)
@@ -115,6 +116,22 @@ export default function CameraCapture({ onCaptureComplete }) {
     }
     if (question.trim()) {
       fd.append('question', question.trim())
+    }
+
+    if (!navigator.onLine) {
+      try {
+        await saveToQueue(`${API_BASE}/upload_image`, fd)
+        setResponse({
+          reply_text: 'You are currently offline. Your image has been saved and will be analyzed automatically when you reconnect.'
+        })
+      } catch (err) {
+        console.error('Failed to queue offline image', err)
+        setError('Sorry, your device is offline and we failed to save the image locally. Please try again when online.')
+      } finally {
+        setProcessing(false)
+        setCapturedImage(null)
+      }
+      return
     }
 
     try {

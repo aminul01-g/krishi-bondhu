@@ -5,7 +5,10 @@ import json
 import requests
 import google.generativeai as genai
 from dotenv import load_dotenv
+import librosa
+import soundfile as sf
 from app.core.prompts import GEMINI_TRANSCRIPTION_PROMPT
+from app.config.model_config import model_registry
 
 load_dotenv()
 
@@ -201,46 +204,34 @@ def transcribe_with_google_speech(audio_path: str) -> dict:
     return {"text": transcript_text, "language": language, "unclear": unclear}
 
 
-def transcribe_with_huggingface_whisper(audio_path: str) -> dict:
-    if not HUGGINGFACE_API_KEY:
-        raise Exception("Hugging Face API key is not configured")
+def transcribe_with_local_whisper(audio_path: str) -> dict:
     if not os.path.exists(audio_path):
         raise Exception(f"Audio file not found: {audio_path}")
 
-    url = f"https://api-inference.huggingface.co/models/{HUGGINGFACE_SPEECH_MODEL}"
-    mime_type, _ = mimetypes.guess_type(audio_path)
-    if not mime_type:
-        mime_type = "application/octet-stream"
-
-    headers = {
-        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-        "Accept": "application/json"
-    }
-
-    with open(audio_path, 'rb') as f:
-        audio_data = f.read()
-
-    print(f"Transcribing with Hugging Face Whisper: {HUGGINGFACE_SPEECH_MODEL}")
-    resp = requests.post(
-        url,
-        headers=headers,
-        files={"file": (os.path.basename(audio_path), audio_data, mime_type)}
-    )
-    if resp.status_code != 200:
-        raise Exception(f"Hugging Face Whisper failed: {resp.status_code} {resp.text}")
-
-    result = resp.json()
-    transcript_text = result.get("text") if isinstance(result, dict) else None
-    if not transcript_text:
-        raise Exception(f"Hugging Face Whisper returned invalid response: {result}")
-
-    transcript_text = transcript_text.strip()
-    if not transcript_text:
-        raise Exception("Hugging Face Whisper returned empty transcript")
-
-    language = detect_language_from_text(transcript_text)
-    unclear = is_unclear_transcript(transcript_text)
-    return {"text": transcript_text, "language": language, "unclear": unclear}
+    print(f"Transcribing with Local Hugging Face Whisper model...")
+    try:
+        # Load local pipeline
+        stt_pipeline = model_registry.get_stt_model()
+        
+        # Whisper requires EXACTLY 16000 Hz. We use librosa to load and resample safely.
+        audio_array, sampling_rate = librosa.load(audio_path, sr=16000)
+        
+        # Run inference
+        result = stt_pipeline(audio_array)
+        
+        transcript_text = result.get("text")
+        if not transcript_text:
+            raise Exception("Local Whisper returned empty or invalid response.")
+            
+        transcript_text = transcript_text.strip()
+        
+        language = detect_language_from_text(transcript_text)
+        unclear = is_unclear_transcript(transcript_text)
+        
+        return {"text": transcript_text, "language": language, "unclear": unclear}
+        
+    except Exception as e:
+        raise Exception(f"Local Whisper inference failed: {str(e)}")
 
 
 def transcribe_audio(audio_path: str) -> dict:
@@ -248,8 +239,8 @@ def transcribe_audio(audio_path: str) -> dict:
     google_failure = None
 
     try:
-        result = transcribe_with_huggingface_whisper(audio_path)
-        result["stt_source"] = "Hugging Face Whisper"
+        result = transcribe_with_local_whisper(audio_path)
+        result["stt_source"] = "Local HF Whisper"
         result["stt_source_reason"] = "Succeeded"
         return result
     except Exception as hf_error:

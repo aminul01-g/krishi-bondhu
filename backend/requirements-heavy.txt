@@ -2,3 +2,7 @@ torch
 torchvision
 ultralytics
 opencv-python-headless
+accelerate
+bitsandbytes
+soundfile
+librosa
