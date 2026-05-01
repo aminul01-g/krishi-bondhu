@@ -90,7 +90,7 @@ class KrishiCrewOrchestrator:
             agents=list(agents_tuple),
             tasks=tasks_list,
             process=Process.sequential,
-            memory=True,
+            memory=False,
             verbose=True,
             step_callback=sync_step_callback
         )
