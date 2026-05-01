@@ -39,10 +39,10 @@ class KrishiCrewOrchestrator:
         # Agronomist uses the heavy 70B (or 2B fallback)
         agronomist_llm = model_registry.get_agronomist_llm()
         
-        router_agent = Agent(config=self.agents_config["router_agent"], llm=interpreter_llm, verbose=True)
-        agronomist_agent = Agent(config=self.agents_config["agronomist_agent"], llm=agronomist_llm, verbose=True)
-        pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], verbose=True)
-        weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], verbose=True)
+        router_agent = Agent(config=self.agents_config["router_agent"], llm=interpreter_llm, allow_delegation=False, verbose=True)
+        agronomist_agent = Agent(config=self.agents_config["agronomist_agent"], llm=agronomist_llm, allow_delegation=False, verbose=True)
+        pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], allow_delegation=False, verbose=True)
+        weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], allow_delegation=False, verbose=True)
         return router_agent, agronomist_agent, pathologist_agent, weather_agent
 
     def _create_tasks(self, agents):
