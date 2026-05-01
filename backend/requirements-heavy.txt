@@ -6,7 +6,3 @@ accelerate
 bitsandbytes
 soundfile
 librosa
-crewai
-crewai-tools
-langchain-huggingface
-transformers
