@@ -230,16 +230,22 @@ LLM_PROVIDER=gemini
 docker compose restart backend
 ```
 
-### Available Models
+### Specialized AI Models
 
-**Hugging Face (Recommended for free tier):**
-- `meta-llama/Llama-3.2-3B-Instruct` (default, fast & reliable)
-- Other models available on HF Serverless Inference
+KrishiBondhu utilizes a multi-agent architecture powered by highly specialized models:
 
-**Google Gemini:**
-- `models/gemini-2.5-flash` (default)
-- Rate limit: 20 requests/day on free tier
+**Language & Logic Models (Hugging Face):**
+- **Agronomist Agent:** `AI71ai/Llama-agrillm-3.3-70B` (Primary expert reasoning)
+- **Fallback / Low-VRAM Agent:** `FN-LLM-2B` (Lightweight fallback)
+- **Interpreter / Router Agent:** `Tiger-Research/TigerLLM-1B` (Fast bilingual NLP)
 
+**Vision & Audio Models:**
+- **Disease Analyst (Vision):** `prof-freakenstein/plantnet-disease-detection` (97% accuracy on 38 classes)
+- **Explainable AI (VLM):** `enalis/scold` (Vision-language embedding for symptom explanation)
+- **Speech-to-Text:** `mozilla-ai/whisper-large-v3-bn` (Native Bengali 16kHz ASR pipeline)
+
+**Google Gemini (Legacy/Fallback):**
+- `models/gemini-2.5-flash` (Available as a high-speed fallback for basic mode)
 ##  Usage
 
 ### Web Interface
@@ -405,10 +411,10 @@ For issues and questions:
 
 ## 🙏 Acknowledgments
 
-- Google Gemini API for LLM and Vision capabilities
-- Hugging Face for free-tier model hosting
-- LangGraph for workflow orchestration
-- FastAPI and React communities
+- **CrewAI** for multi-agent workflow orchestration
+- **Hugging Face** for the local model ecosystem and Transformers library
+- **AI71, Tiger-Research, and Mozilla** for open-sourcing localized and highly capable foundation models
+- **FastAPI and React** communities
 
 ---
 
