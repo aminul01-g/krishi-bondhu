@@ -234,7 +234,51 @@ def transcribe_with_local_whisper(audio_path: str) -> dict:
         raise Exception(f"Local Whisper inference failed: {str(e)}")
 
 
+def transcribe_with_groq_whisper(audio_path: str) -> dict:
+    if not os.path.exists(audio_path):
+        raise Exception(f"Audio file not found: {audio_path}")
+
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        raise Exception("GROQ_API_KEY not found.")
+
+    print(f"Transcribing with Groq Whisper API...")
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        with open(audio_path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+              file=(os.path.basename(audio_path), file.read()),
+              model="whisper-large-v3",
+            )
+            
+        transcript_text = transcription.text
+        if not transcript_text:
+            raise Exception("Groq Whisper returned empty response.")
+            
+        transcript_text = transcript_text.strip()
+        
+        language = detect_language_from_text(transcript_text)
+        unclear = is_unclear_transcript(transcript_text)
+        
+        return {"text": transcript_text, "language": language, "unclear": unclear}
+    except Exception as e:
+        raise Exception(f"Groq Whisper inference failed: {str(e)}")
+
+
 def transcribe_audio(audio_path: str) -> dict:
+    # Try Groq API first if key exists
+    groq_failure = None
+    if os.getenv("GROQ_API_KEY", "").strip():
+        try:
+            result = transcribe_with_groq_whisper(audio_path)
+            result["stt_source"] = "Groq Whisper API"
+            result["stt_source_reason"] = "Succeeded"
+            return result
+        except Exception as groq_error:
+            groq_failure = str(groq_error)
+            print(f"[WARN] Groq Whisper fallback: {groq_failure}")
+
     hf_failure = None
     google_failure = None
 
