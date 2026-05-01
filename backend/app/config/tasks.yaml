@@ -5,7 +5,8 @@ route_query_task:
     1. 'greeting': A simple greeting or general chat.
     2. 'disease': The user is asking about a plant disease or providing an image for diagnosis.
     3. 'weather': The user is asking about weather conditions.
-    4. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
+    4. 'market': The user is asking about crop prices, market rates, or where to sell.
+    5. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
   expected_output: >
     You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
     The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
@@ -32,3 +33,11 @@ weather_advice_task:
     Consider the user's query: '{user_input}'.
   expected_output: >
     Provide actionable weather advice for farming in the user's language.
+
+market_advice_task:
+  description: >
+    Provide market intelligence for the user's query: '{user_input}'.
+    Extract the crop mentioned and use your market tools to find current prices and trends.
+    Format your response in the user's language, emphasizing whether they should hold or sell.
+  expected_output: >
+    A clear summary of market prices, predictions, and selling advice.

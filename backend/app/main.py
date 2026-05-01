@@ -14,6 +14,7 @@ langgraph_app = KrishiCrewOrchestrator()
 from app.api.utils import save_audio_local, save_image_local
 from app.services.audio import stt_node
 from app.api import routes as api_routes
+from app.api.endpoints import market as market_routes
 from app.db import get_db, engine, DATABASE_URL
 from app.models.db_models import Base
 
@@ -84,6 +85,7 @@ async def create_database_tables():
             print(f"[ERROR] Failed to create SQLite tables: {e}")
 
 app.include_router(api_routes.router, prefix="/api")
+app.include_router(market_routes.router, prefix="/api/market", tags=["market"])
 
 # --- WebSocket Setup for Agent Status ---
 from typing import List

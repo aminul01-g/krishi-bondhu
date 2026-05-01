@@ -7,6 +7,7 @@ from crewai import Agent, Task, Crew, Process
 from app.config.model_config import model_registry
 from app.tools.vision_tool import LocalVisionDiseaseTool
 from app.tools.weather_tool import WeatherLookupTool
+from app.tools.market_tool import MarketPriceTool
 
 # 1. Setup Structured Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -30,6 +31,7 @@ class KrishiCrewOrchestrator:
         # Tools
         self.vision_tool = LocalVisionDiseaseTool()
         self.weather_tool = WeatherLookupTool()
+        self.market_tool = MarketPriceTool()
         
         logger.info("KrishiCrewOrchestrator initialized with memory and caching.")
 
@@ -43,17 +45,19 @@ class KrishiCrewOrchestrator:
         agronomist_agent = Agent(config=self.agents_config["agronomist_agent"], llm=agronomist_llm, allow_delegation=False, verbose=True)
         pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], allow_delegation=False, verbose=True)
         weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], allow_delegation=False, verbose=True)
-        return router_agent, agronomist_agent, pathologist_agent, weather_agent
+        market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=agronomist_llm, tools=[self.market_tool], allow_delegation=False, verbose=True)
+        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent
 
     def _create_tasks(self, agents):
-        router, agronomist, pathologist, weather = agents
+        router, agronomist, pathologist, weather, market = agents
         
         route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
         disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
         agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"], agent=agronomist)
         weather_task = Task(config=self.tasks_config["weather_advice_task"], agent=weather)
+        market_task = Task(config=self.tasks_config["market_advice_task"], agent=market)
         
-        return [route_task, disease_task, agronomy_task, weather_task]
+        return [route_task, disease_task, agronomy_task, weather_task, market_task]
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
         """Create a deterministic cache key based on inputs."""
@@ -87,8 +91,8 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        router_agent, agronomist_agent, pathologist_agent, weather_agent = agents_tuple
-        route_task, disease_task, agronomy_task, weather_task = tasks_list
+        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task, market_task = tasks_list
 
         import asyncio
         import json
@@ -130,6 +134,11 @@ class KrishiCrewOrchestrator:
                 logger.info("Routing to Weather Agent...")
                 weather_crew = Crew(agents=[weather_agent], tasks=[weather_task], verbose=True, step_callback=sync_step_callback)
                 result = await asyncio.to_thread(weather_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "market":
+                logger.info("Routing to Market Agent...")
+                market_crew = Crew(agents=[market_agent], tasks=[market_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(market_crew.kickoff, inputs=inputs)
                 final_text = str(result)
             else:
                 logger.info("Routing to Agronomist Agent...")
