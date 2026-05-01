@@ -18,7 +18,7 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
 ```mermaid
 graph TD
     Farmer([Farmer])
-    ReactPWA[React PWA (Vibrant UI)]
+    ReactPWA["React PWA (Vibrant UI)"]
     FastAPI[FastAPI Backend]
     IntentRouter[Intent Router Agent]
     DirectResponse[Direct Response]
