@@ -18,7 +18,7 @@ An intelligent agricultural assistant designed specifically for farmers in Bangl
 ```mermaid
 graph TD
     Farmer([Farmer])
-    ReactPWA[React PWA]
+    ReactPWA[React PWA (Vibrant UI)]
     FastAPI[FastAPI Backend]
     IntentRouter[Intent Router Agent]
     DirectResponse[Direct Response]
@@ -26,9 +26,13 @@ graph TD
     Agronomist[Agronomist Agent]
     Pathologist[Plant Pathologist Agent]
     WeatherAgent[Weather Analyst Agent]
+    MarketAgent[Market Analyst Agent]
+    FarmManager[Farm Manager Agent]
+    AlertAdvisor[Alert Advisor Agent]
     VisionPipeline[Local HF Vision Pipeline]
     WeatherData[External Weather Data]
-    Synthesis[Synthesis]
+    MarketData[DAM Market Data]
+    Synthesis[Synthesis & DB Storage]
 
     Farmer -- Text/Voice/Image --> ReactPWA
     ReactPWA -- POST /api/chat --> FastAPI
@@ -41,6 +45,9 @@ graph TD
     CrewAIManager --> Agronomist
     CrewAIManager --> Pathologist
     CrewAIManager --> WeatherAgent
+    CrewAIManager --> MarketAgent
+    CrewAIManager --> FarmManager
+    CrewAIManager --> AlertAdvisor
     
     Agronomist --> Synthesis
     
@@ -51,6 +58,13 @@ graph TD
     WeatherAgent -- Tool --> WeatherData
     WeatherData --> Synthesis
     WeatherAgent --> Synthesis
+
+    MarketAgent -- Tool --> MarketData
+    MarketData --> Synthesis
+    MarketAgent --> Synthesis
+
+    FarmManager --> Synthesis
+    AlertAdvisor --> Synthesis
     
     Synthesis --> FastAPI
     FastAPI -- Cached via TTLCache --> FastAPI
@@ -65,6 +79,9 @@ graph TD
 - **Voice Interaction**: Speech-to-text and text-to-speech for hands-free operation
 - **Weather Integration**: Location-based weather data for farming decisions
 - **Conversation History**: Persistent chat history across sessions
+- **Smart Market Intelligence**: Real-time wholesale prices from nearby mandis with 7-day predictive trend advice
+- **Digital Farm Diary**: Voice-driven logging of daily farming expenses and yields with automatic P&L aggregation
+- **Proactive Pest Alerts**: Automated weather-correlated pest/disease risk notifications based on current crop stages
 
 ### Technical Features
 - **Progressive Web App (PWA)**: Installable on mobile/desktop with offline capabilities
