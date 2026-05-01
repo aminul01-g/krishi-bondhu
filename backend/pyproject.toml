@@ -31,6 +31,7 @@ dependencies = [
     "sqlalchemy>=2.0.25",
     "asyncpg>=0.29.0",
     "alembic>=1.13.1",
+    "aiosqlite>=0.20.0",
     
     # Audio/Misc
     "gtts>=2.5.0",

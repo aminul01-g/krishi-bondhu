@@ -11,6 +11,8 @@ aiohttp==3.13.5
     #   langchain-community
 aiosignal==1.4.0
     # via aiohttp
+aiosqlite==0.22.1
+    # via krishibondhu-backend (backend/pyproject.toml)
 alembic==1.18.4
     # via
     #   krishibondhu-backend (backend/pyproject.toml)
