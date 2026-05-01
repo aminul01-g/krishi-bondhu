@@ -45,7 +45,9 @@ class ModelRegistry:
 
     def get_agronomist_llm(self):
         """Loads the Agronomist LLM wrapped as a LangChain LLM for CrewAI."""
-        if os.getenv("GROQ_API_KEY"):
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        if api_key:
+            os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for blazing fast inference.")
             if "agronomist" not in self._loaded_models:
                 self._loaded_models["agronomist"] = ChatGroq(model_name="llama3-70b-8192", temperature=0.7)
@@ -104,7 +106,9 @@ class ModelRegistry:
 
     def get_interpreter_llm(self):
         """Loads TigerLLM for Bengali NLP."""
-        if os.getenv("GROQ_API_KEY"):
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        if api_key:
+            os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for interpreter.")
             if "interpreter" not in self._loaded_models:
                 self._loaded_models["interpreter"] = ChatGroq(model_name="llama3-8b-8192", temperature=0.1)
