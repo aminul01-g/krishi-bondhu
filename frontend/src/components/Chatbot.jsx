@@ -460,24 +460,29 @@ export default function Chatbot({ onMessageComplete }) {
   }, [])
 
   return (
-    <div className="chatbot">
-      <div className="chat-messages">
+    <div className="chatbot" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '500px' }}>
+      <div className="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.role}`}>
-            <div className="message-content">
+          <div key={idx} className={`message ${msg.role}`} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
+            <div className="message-content" style={{ 
+              background: msg.role === 'user' ? 'var(--primary)' : '#f1f5f9', 
+              color: msg.role === 'user' ? 'white' : 'var(--text-main)',
+              padding: '1.25rem 1.5rem',
+              borderRadius: msg.role === 'user' ? '24px 24px 4px 24px' : '24px 24px 24px 4px',
+              boxShadow: 'var(--shadow-sm)',
+              position: 'relative'
+            }}>
               {msg.image && (
-                <img src={msg.image} alt="Uploaded" className="message-image" />
+                <img src={msg.image} alt="Uploaded" className="message-image" style={{ width: '100%', borderRadius: '12px', marginBottom: '0.75rem', display: 'block' }} />
               )}
-              <p>{msg.content}</p>
+              <p style={{ margin: 0, lineHeight: 1.6, fontSize: '1.05rem', fontWeight: 500 }}>{msg.content}</p>
               {msg.metadata && (
-                <div className="message-metadata">
+                <div className="message-metadata" style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                   {msg.metadata.crop && (
-                    <span className="badge">🌾 {msg.metadata.crop}</span>
+                    <span className="badge" style={{ background: 'rgba(255,255,255,0.2)', color: msg.role === 'user' ? 'white' : 'var(--primary)', padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>🌾 {msg.metadata.crop}</span>
                   )}
                   {msg.metadata.vision_result?.disease && (
-                    <span className="badge">
-                      🔍 {msg.metadata.vision_result.disease}
-                    </span>
+                    <span className="badge" style={{ background: 'rgba(255,255,255,0.2)', color: msg.role === 'user' ? 'white' : 'var(--primary)', padding: '0.2rem 0.6rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 800 }}>🔍 {msg.metadata.vision_result.disease}</span>
                   )}
                 </div>
               )}
@@ -485,12 +490,12 @@ export default function Chatbot({ onMessageComplete }) {
           </div>
         ))}
         {processing && (
-          <div className="message assistant">
-            <div className="message-content">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+          <div className="message assistant" style={{ alignSelf: 'flex-start' }}>
+            <div className="message-content" style={{ background: '#f1f5f9', padding: '1rem 1.5rem', borderRadius: '24px 24px 24px 4px' }}>
+              <div className="typing-indicator" style={{ display: 'flex', gap: '4px' }}>
+                <span style={{ width: '8px', height: '8px', background: '#94a3b8', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span>
+                <span style={{ width: '8px', height: '8px', background: '#94a3b8', borderRadius: '50%', animation: 'pulse 1.5s infinite 0.2s' }}></span>
+                <span style={{ width: '8px', height: '8px', background: '#94a3b8', borderRadius: '50%', animation: 'pulse 1.5s infinite 0.4s' }}></span>
               </div>
             </div>
           </div>
@@ -498,94 +503,62 @@ export default function Chatbot({ onMessageComplete }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-area">
-        {/* TTS Control */}
+      <div className="chat-input-area" style={{ borderTop: '1px solid #e2e8f0', padding: '1.5rem', background: '#f8fafc', borderRadius: '0 0 32px 32px' }}>
         {ttsAudioRef.current && (
-          <div className="tts-control">
-            <button onClick={toggleTTS} className="play-pause-tts-btn">
-              {isPaused ? '▶️' : '⏸️'}
+          <div className="tts-control" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', background: 'white', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <button onClick={toggleTTS} style={{ background: 'var(--primary-soft)', border: 'none', color: 'var(--primary-dark)', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: 700 }}>
+              {isPaused ? '▶️ Resume' : '⏸️ Pause'}
             </button>
-            <button onClick={stopTTS} className="stop-tts-btn" title="Stop and reset">
-              ⏹
-            </button>
-            <span className="tts-status">
-              {isPaused ? '⏸️ Paused' : '🔊 Playing response...'}
-            </span>
+            <button onClick={stopTTS} style={{ background: '#fee2e2', border: 'none', color: '#991b1b', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: 700 }}>⏹ Stop</button>
+            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>🔊 Voice response playing...</span>
           </div>
         )}
+
         {imagePreview && (
-          <div className="image-preview-small">
-            <img src={imagePreview} alt="Preview" />
-            <button onClick={removeImage} className="remove-image-btn">✕</button>
+          <div className="image-preview-small" style={{ marginBottom: '1rem', position: 'relative', display: 'inline-block' }}>
+            <img src={imagePreview} alt="Preview" style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '2px solid var(--primary)' }} />
+            <button onClick={removeImage} style={{ position: 'absolute', top: '-8px', right: '-8px', background: 'var(--danger)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer' }}>✕</button>
           </div>
         )}
-                {showCamera && (
-          <div className="camera-inline-container">
-            <video ref={videoRef} autoPlay playsInline className="camera-video-inline" />
-            <div className="camera-inline-controls">
-              <button onClick={capturePhoto} className="capture-btn-inline">📸 Capture</button>
-              <button onClick={stopCamera} className="stop-camera-btn-inline">✕ Cancel</button>
+
+        {showCamera && (
+          <div className="camera-inline-container" style={{ marginBottom: '1rem', background: 'black', borderRadius: '20px', overflow: 'hidden', position: 'relative' }}>
+            <video ref={videoRef} autoPlay playsInline style={{ width: '100%', display: 'block' }} />
+            <div style={{ position: 'absolute', bottom: '1rem', left: '0', right: '0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+              <button onClick={capturePhoto} style={{ background: 'white', color: 'black', padding: '0.75rem 1.5rem', borderRadius: '99px', fontWeight: 700, border: 'none' }}>📸 Take Photo</button>
+              <button onClick={stopCamera} style={{ background: 'rgba(255,255,255,0.2)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: '99px', fontWeight: 700, border: 'none', backdropFilter: 'blur(10px)' }}>Cancel</button>
             </div>
             <canvas ref={canvasRef} style={{ display: 'none' }} />
           </div>
         )}
-        <div className="chat-input-container">
-          <button
-            onClick={startCamera}
-            className="attach-camera-btn"
-            title="Take a photo"
-            disabled={processing || recording}
-          >
-            📸
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="attach-image-btn"
-            title="Attach image"
-            disabled={processing || recording}
-          >
-            📎
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-            style={{ display: 'none' }}
-          />
+
+        <div className="chat-input-container" style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={startCamera} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', width: '44px', height: '44px', display: 'grid', placeItems: 'center', fontSize: '1.2rem' }} title="Camera">📸</button>
+            <button onClick={() => fileInputRef.current?.click()} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', width: '44px', height: '44px', display: 'grid', placeItems: 'center', fontSize: '1.2rem' }} title="Attach">📎</button>
+          </div>
+          
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+          
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={recording ? "Recording audio... Click stop when done." : "Type your question here... (Bengali or English)"}
-            rows="1"
-            className="chat-input"
+            placeholder="Type your question..."
+            style={{ flex: 1, padding: '0.85rem 1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', resize: 'none', fontSize: '1rem', outline: 'none', background: 'white' }}
             disabled={processing || recording}
+            rows="1"
           />
+
           {recording ? (
-            <button onClick={stopRecording} className="stop-record-btn pulse">
-              ⏹
-            </button>
+            <button onClick={stopRecording} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '12px', width: '44px', height: '44px', display: 'grid', placeItems: 'center', animation: 'pulse 1.5s infinite' }}>⏹</button>
           ) : (
-            <button
-              onClick={startRecording}
-              disabled={processing || input.trim()}
-              className="record-btn-inline"
-              title="Record Voice"
-            >
-              🎤
-            </button>
+            <button onClick={startRecording} disabled={processing || input.trim()} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', width: '44px', height: '44px', display: 'grid', placeItems: 'center', fontSize: '1.2rem' }}>🎤</button>
           )}
-          <button
-            onClick={handleSend}
-            disabled={processing || recording || (!input.trim() && !selectedImage)}
-            className="send-btn"
-          >
+
+          <button onClick={handleSend} disabled={processing || recording || (!input.trim() && !selectedImage)} style={{ background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '12px', width: '44px', height: '44px', display: 'grid', placeItems: 'center', fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.2)' }}>
             {processing ? '⏳' : '➤'}
           </button>
-        </div>
-        <div className="chat-hint">
-          💡 Tip: You can attach images or ask questions in Bengali or English
         </div>
       </div>
     </div>
