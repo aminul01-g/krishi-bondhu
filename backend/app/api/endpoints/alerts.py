@@ -11,7 +11,7 @@ from app.models.db_models import CuratedTip, User
 logger = logging.getLogger("AlertsAPI")
 router = APIRouter()
 
-# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
+from app.core.dependencies import orchestrator
 
 class DailyAlertResponse(BaseModel):
     user_id: str

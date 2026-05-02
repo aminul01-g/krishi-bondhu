@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import Recorder from './components/Recorder'
-import CameraCapture from './components/CameraCapture'
 import Chatbot from './components/Chatbot'
 import ConversationHistory from './components/ConversationHistory'
 import MarketIntelligence from './components/MarketIntelligence'
@@ -12,12 +10,14 @@ import FinanceHub from './components/FinanceHub'
 import CommunityQA from './components/CommunityQA'
 import Marketplace from './components/Marketplace'
 import EmergencySupport from './components/EmergencySupport'
+import LandingPage from './components/LandingPage'
 import { API_BASE } from './api'
 import { useAgentSocket } from './hooks/useAgentSocket'
 import { flushQueue } from './services/offlineQueue'
 import './App.css'
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('krishi_auth_token'))
   const [activeTab, setActiveTab] = useState('chat')
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(false)
@@ -69,8 +69,6 @@ export default function App() {
   }
 
   const tabs = [
-    { id: 'voice', label: 'Voice Assistant', icon: '🎤' },
-    { id: 'camera', label: 'Camera Diagnosis', icon: '📹' },
     { id: 'chat', label: 'AI Chat', icon: '💬' },
     { id: 'market', label: 'Market Intelligence', icon: '📈' },
     { id: 'diary', label: 'Farm Diary', icon: '📒' },
@@ -82,6 +80,15 @@ export default function App() {
     { id: 'marketplace', label: 'Marketplace', icon: '🛒' },
     { id: 'emergency', label: 'Emergency', icon: '🚨' }
   ]
+
+  const handleLogout = () => {
+    localStorage.removeItem('krishi_auth_token')
+    setIsAuthenticated(false)
+  }
+
+  if (!isAuthenticated) {
+    return <LandingPage onAuthSuccess={() => setIsAuthenticated(true)} />
+  }
 
   return (
     <div className="app">
@@ -100,6 +107,7 @@ export default function App() {
               {isConnected ? `🟢 ${agentStatus || 'Agent ready'}` : '🔴 Reconnecting...'}
             </span>
             {isOffline && <span className="offline-banner">Offline mode enabled — actions will sync when you're back online.</span>}
+            <button className="logout-btn" onClick={handleLogout}>Log out</button>
           </div>
         </div>
 
@@ -163,21 +171,7 @@ export default function App() {
 
             <section className="content-area">
               <div className="content-card glassmorphism">
-                {activeTab === 'voice' && (
-                  <>
-                    <h2>🎤 Voice Farming Assistant</h2>
-                    <p className="section-description">Record a question and receive fast guidance from KrishiBondhu.</p>
-                    <Recorder onConversationComplete={handleNewConversation} />
-                  </>
-                )}
 
-                {activeTab === 'camera' && (
-                  <>
-                    <h2>📹 Camera Crop Diagnosis</h2>
-                    <p className="section-description">Capture live crop images for disease and nutrient analysis.</p>
-                    <CameraCapture onCaptureComplete={handleNewConversation} />
-                  </>
-                )}
 
                 {activeTab === 'chat' && (
                   <>

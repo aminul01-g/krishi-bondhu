@@ -9,10 +9,9 @@ from dotenv import load_dotenv
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
 
-# from app.crews.krishi_crew import KrishiCrewOrchestrator
-# langgraph_app = KrishiCrewOrchestrator()
+from app.core.dependencies import orchestrator
 from app.api.utils import save_audio_local, save_image_local
-# from app.services.audio import stt_node
+from app.services.audio import stt_node
 from app.api import routes as api_routes
 from app.api.endpoints import market as market_routes
 from app.api.endpoints import diary as diary_routes
@@ -138,7 +137,7 @@ async def daily_notification_job():
                 }
                 
                 # Trigger the orchestrator for 'water' intent
-                # result = await langgraph_app.ainvoke(initial_state)
+                # result = await orchestrator.ainvoke(initial_state)
                 # advice = result.get("reply_text")
                 
                 # For the mock/prototype, we log a standard morning message
@@ -246,7 +245,7 @@ async def upload_audio(
 
     try:
         # Pass the websocket broadcast as the status callback to stream agent thoughts
-        result = await langgraph_app.ainvoke(
+        result = await orchestrator.ainvoke(
             initial_state, 
             status_callback=ws_manager.broadcast
         )
@@ -332,7 +331,7 @@ async def upload_image(
     try:
         # Skip STT if no audio, go directly to intent/vision
         # We'll modify the flow to handle image-only queries
-        result = await langgraph_app.ainvoke(initial_state)
+        result = await orchestrator.ainvoke(initial_state)
         # Ensure we always have a reply_text
         # Ensure we always have a reply_text
         if not result.get("reply_text"):
@@ -449,7 +448,7 @@ async def chat(
     }
     try:
         # For text-only chat, skip STT and go to reasoning
-        result = await langgraph_app.ainvoke(initial_state)
+        result = await orchestrator.ainvoke(initial_state)
         # Ensure we always have a reply_text
         # Ensure we always have a reply_text
         if not result.get("reply_text"):

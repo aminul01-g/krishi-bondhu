@@ -8,6 +8,7 @@ import logging
 from app.db import get_db
 from app.models.db_models import FarmDiary, User
 # from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
+from app.core.dependencies import orchestrator
 
 logger = logging.getLogger("DiaryAPI")
 router = APIRouter()

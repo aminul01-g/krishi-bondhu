@@ -10,8 +10,7 @@ logger = logging.getLogger("MarketAPI")
 router = APIRouter()
 
 # Instantiate the orchestrator for targeted market crew usage
-# Note: In a real app we might inject this as a dependency to reuse the cache
-# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
+from app.core.dependencies import orchestrator
 market_tool = MarketPriceTool()
 
 class MarketAdviceResponse(BaseModel):

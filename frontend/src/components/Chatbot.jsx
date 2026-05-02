@@ -20,6 +20,13 @@ export default function Chatbot({ onMessageComplete }) {
   const ttsAudioRef = useRef(null)
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const [recording, setRecording] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
+  const [cameraStream, setCameraStream] = useState(null)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
 
   useEffect(() => {
     getCurrentLocation()
@@ -77,6 +84,172 @@ export default function Chatbot({ onMessageComplete }) {
         setImagePreview(reader.result)
       }
       reader.readAsDataURL(file)
+    }
+  }
+
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      mediaRecorderRef.current = mr
+      chunksRef.current = []
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data)
+      }
+
+      mr.onstop = async () => {
+        setProcessing(true)
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        
+        setMessages(prev => [...prev, { role: 'user', content: '🎤 [Voice Message]', image: imagePreview }])
+        
+        const fd = new FormData()
+        fd.append('file', blob, 'recording.webm')
+        const userId = localStorage.getItem('krishi_user_id') || `farmer_${Date.now()}`
+        fd.append('user_id', userId)
+        if (gps.lat && gps.lon) {
+          fd.append('lat', gps.lat)
+          fd.append('lon', gps.lon)
+        }
+        if (selectedImage) {
+          fd.append('image', selectedImage)
+        }
+
+        if (!navigator.onLine) {
+          try {
+            await saveToQueue(`${API_BASE}/upload_audio`, fd)
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: 'You are currently offline. Your audio has been saved and will be answered when you reconnect.'
+            }])
+          } catch (err) {
+            console.error('Failed to queue offline audio', err)
+          } finally {
+            setProcessing(false)
+            setSelectedImage(null)
+            setImagePreview(null)
+            stream.getTracks().forEach(track => track.stop())
+          }
+          return
+        }
+
+        try {
+          const resp = await fetch(`${API_BASE}/upload_audio`, {
+            method: 'POST',
+            body: fd
+          })
+          
+          let data = await resp.json()
+          
+          if (!resp.ok && !data.reply_text) {
+             throw new Error(data.error || 'Server error')
+          }
+          
+          const assistantMessage = data.reply_text || 'I received your audio, but could not generate a response.'
+          
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: assistantMessage,
+            metadata: {
+              crop: data.crop,
+              vision_result: data.vision_result,
+              weather_forecast: data.weather_forecast,
+              transcript: data.transcript
+            }
+          }])
+
+          if (data.tts_path) {
+            const ttsResp = await fetch(`${API_BASE}/get_tts?path=${encodeURIComponent(data.tts_path)}`)
+            if (ttsResp.ok) {
+              const ttsBlob = await ttsResp.blob()
+              const audio = new Audio(URL.createObjectURL(ttsBlob))
+              ttsAudioRef.current = audio
+              setIsPlaying(true)
+              setIsPaused(false)
+              audio.onended = () => { setIsPlaying(false); setIsPaused(false) }
+              audio.onerror = () => { setIsPlaying(false); setIsPaused(false) }
+              audio.onpause = () => setIsPaused(true)
+              audio.onplay = () => setIsPaused(false)
+              audio.play().catch(err => {
+                console.error('Audio play error:', err)
+                setIsPlaying(false)
+                setIsPaused(false)
+              })
+            }
+          }
+
+          if (onMessageComplete) onMessageComplete()
+
+        } catch(err) {
+            console.error(err)
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `Sorry, I encountered an error. Please try again.`
+            }])
+        } finally {
+            setProcessing(false)
+            setSelectedImage(null)
+            setImagePreview(null)
+            stream.getTracks().forEach(track => track.stop())
+        }
+      }
+      
+      mr.start()
+      setRecording(true)
+    } catch (err) {
+      alert('Could not access microphone.')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+      setRecording(false)
+    }
+  }
+
+  const startCamera = async () => {
+    try {
+      setShowCamera(true)
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      })
+      setCameraStream(mediaStream)
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream
+      }
+    } catch (err) {
+      alert('Could not access camera.')
+      setShowCamera(false)
+    }
+  }
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop())
+      setCameraStream(null)
+    }
+    setShowCamera(false)
+  }
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      const context = canvas.getContext('2d')
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      context.drawImage(video, 0, 0)
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" })
+          setSelectedImage(file)
+          setImagePreview(URL.createObjectURL(blob))
+          stopCamera()
+        }
+      }, 'image/jpeg', 0.9)
     }
   }
 
@@ -275,10 +448,13 @@ export default function Chatbot({ onMessageComplete }) {
   }
 
   useEffect(() => {
-    return () => {
+        return () => {
       if (ttsAudioRef.current) {
         ttsAudioRef.current.pause()
         ttsAudioRef.current = null
+      }
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop())
       }
     }
   }, [])
@@ -343,13 +519,32 @@ export default function Chatbot({ onMessageComplete }) {
             <button onClick={removeImage} className="remove-image-btn">✕</button>
           </div>
         )}
+                {showCamera && (
+          <div className="camera-inline-container">
+            <video ref={videoRef} autoPlay playsInline className="camera-video-inline" />
+            <div className="camera-inline-controls">
+              <button onClick={capturePhoto} className="capture-btn-inline">📸 Capture</button>
+              <button onClick={stopCamera} className="stop-camera-btn-inline">✕ Cancel</button>
+            </div>
+            <canvas ref={canvasRef} style={{ display: 'none' }} />
+          </div>
+        )}
         <div className="chat-input-container">
+          <button
+            onClick={startCamera}
+            className="attach-camera-btn"
+            title="Take a photo"
+            disabled={processing || recording}
+          >
+            📸
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             className="attach-image-btn"
             title="Attach image"
+            disabled={processing || recording}
           >
-            📷
+            📎
           </button>
           <input
             ref={fileInputRef}
@@ -362,14 +557,28 @@ export default function Chatbot({ onMessageComplete }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Type your question here... (Bengali or English)"
+            placeholder={recording ? "Recording audio... Click stop when done." : "Type your question here... (Bengali or English)"}
             rows="1"
             className="chat-input"
-            disabled={processing}
+            disabled={processing || recording}
           />
+          {recording ? (
+            <button onClick={stopRecording} className="stop-record-btn pulse">
+              ⏹
+            </button>
+          ) : (
+            <button
+              onClick={startRecording}
+              disabled={processing || input.trim()}
+              className="record-btn-inline"
+              title="Record Voice"
+            >
+              🎤
+            </button>
+          )}
           <button
             onClick={handleSend}
-            disabled={processing || (!input.trim() && !selectedImage)}
+            disabled={processing || recording || (!input.trim() && !selectedImage)}
             className="send-btn"
           >
             {processing ? '⏳' : '➤'}

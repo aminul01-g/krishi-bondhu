@@ -11,8 +11,7 @@ from app.models.db_models import SoilTestLog
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Instantiate the orchestrator once
-# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
+from app.core.dependencies import orchestrator
 
 class SoilAnalyzeRequest(BaseModel):
     user_id: str

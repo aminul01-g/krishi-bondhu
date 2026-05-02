@@ -8,6 +8,7 @@ from app.db import get_db_session
 from app.models.db_models import InsuranceQuote
 # from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
 from app.tools.finance_tool import CreditScoringTool
+from app.core.dependencies import orchestrator, credit_scorer
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

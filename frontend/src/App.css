@@ -968,14 +968,7 @@ button {
     font-size: 0.85rem;
   }
 }
-  border-radius: 18px;
-  padding: 0.95rem 1.4rem;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  color: white;
-  font-weight: 700;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-  box-shadow: 0 18px 35px rgba(16, 185, 129, 0.18);
-}
+
 
 .vibrant-btn:hover,
 button:hover {
@@ -1110,4 +1103,106 @@ footer.app-footer {
   .tab-btn {
     justify-content: center;
   }
+}
+
+.camera-inline-container {
+  width: 100%;
+  margin-bottom: 1rem;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-video-inline {
+  width: 100%;
+  max-height: 400px;
+  object-fit: cover;
+}
+
+.camera-inline-controls {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+}
+
+.capture-btn-inline {
+  background: var(--primary);
+  color: white;
+  border-radius: 999px;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+}
+
+.stop-camera-btn-inline {
+  background: var(--danger);
+  color: white;
+  border-radius: 999px;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-weight: bold;
+}
+
+.attach-camera-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.attach-camera-btn:hover {
+  transform: scale(1.1);
+}
+
+.record-btn-inline {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+  color: var(--primary);
+}
+
+.record-btn-inline:hover {
+  transform: scale(1.1);
+}
+
+.stop-record-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  color: var(--danger);
+  animation: pulse 1.5s infinite;
+}
+
+.logout-btn {
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.05);
+  color: #991b1b;
+  padding: 0.65rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  backdrop-filter: blur(10px);
+}
+
+.logout-btn:hover {
+  background: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.3);
+  transform: translateY(-1px);
 }

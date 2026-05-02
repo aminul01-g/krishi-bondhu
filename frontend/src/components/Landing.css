@@ -1,0 +1,258 @@
+/* Anthropic-style Landing Page CSS */
+
+.landing-layout {
+  min-height: 100vh;
+  background-color: #fdfcfaf5; /* Anthropic cream/beige */
+  color: #242220;
+  font-family: 'Georgia', serif; /* Classic elegant serif for landing */
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 3rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  font-family: 'Inter', sans-serif;
+}
+
+.nav-brand {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-link {
+  background: none;
+  border: none;
+  color: #64605b;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.nav-link:hover {
+  color: #242220;
+}
+
+.nav-cta {
+  background: #242220;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.nav-cta:hover {
+  background: #403e3b;
+}
+
+.landing-main {
+  flex: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8rem;
+}
+
+.hero-section {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  animation: fadeInDown 0.8s ease-out;
+}
+
+.hero-title {
+  font-size: clamp(3rem, 5vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  color: #1a1918;
+}
+
+.hero-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.15rem;
+  line-height: 1.6;
+  color: #524f4b;
+  margin-bottom: 2.5rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  font-family: 'Inter', sans-serif;
+}
+
+.primary-btn {
+  background: #d4a373; /* Earthy accent */
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.85rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primary-btn:hover {
+  background: #c39262;
+  transform: translateY(-1px);
+}
+
+.secondary-btn {
+  background: transparent;
+  color: #242220;
+  border: 1px solid #d4d1cd;
+  border-radius: 8px;
+  padding: 0.85rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.secondary-btn:hover {
+  background: rgba(0,0,0,0.02);
+  border-color: #242220;
+}
+
+.capabilities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 3rem;
+}
+
+.capability-card h3 {
+  font-size: 1.4rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+  color: #242220;
+}
+
+.capability-card p {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #64605b;
+}
+
+.demo-section {
+  display: flex;
+  justify-content: center;
+}
+
+.demo-window {
+  width: 100%;
+  max-width: 800px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.05);
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.demo-header {
+  background: #f8f7f5;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.dot.red { background: #ff5f56; }
+.dot.yellow { background: #ffbd2e; }
+.dot.green { background: #27c93f; }
+
+.demo-body {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.demo-message {
+  max-width: 80%;
+  padding: 1rem 1.2rem;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.demo-message p { margin: 0; }
+
+.demo-message.user {
+  background: #f3f1ec;
+  align-self: flex-end;
+  color: #242220;
+}
+
+.demo-image-placeholder {
+  margin-top: 0.5rem;
+  background: #e6e3da;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #64605b;
+}
+
+.demo-message.ai {
+  background: #fff;
+  border: 1px solid #eae8e1;
+  align-self: flex-start;
+  color: #242220;
+}
+
+.landing-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 2rem 3rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: #8c8883;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.footer-links {
+  display: flex;
+  gap: 1.5rem;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
