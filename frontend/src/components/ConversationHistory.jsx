@@ -181,7 +181,7 @@ export default function ConversationHistory({ conversations, loading, onDelete }
               <div className="item-content">
                 <audio
                   controls
-                  src={`http://localhost:8000/api/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
+                  src={`${API_BASE}/get_tts?path=${encodeURIComponent(conv.tts_path)}`}
                   className="audio-player"
                 />
               </div>

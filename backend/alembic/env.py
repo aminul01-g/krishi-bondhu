@@ -19,6 +19,7 @@ fileConfig(config.config_file_name)
 
 # Interpret the config file for Python logging.
 from app.models.db_models import Base
+import app.models  # Ensure all model modules are imported for Alembic metadata
 from app.db import DATABASE_URL
 
 def get_url():

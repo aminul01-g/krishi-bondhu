@@ -15,13 +15,12 @@ import { flushQueue } from './services/offlineQueue'
 import './App.css'
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('voice') // voice, image, camera, chat
+  const [activeTab, setActiveTab] = useState('chat')
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
 
-  // Use the WebSocket hook (assuming backend runs on localhost:8000/api/ws/agent_status or dynamically based on API_BASE)
   const wsUrl = API_BASE.replace('http', 'ws') + '/ws/agent_status'
   const { status: agentStatus, isConnected } = useAgentSocket(wsUrl)
 
@@ -43,20 +42,18 @@ export default function App() {
 
   useEffect(() => {
     fetchConversations()
-    // Refresh conversations every 10 seconds
     const interval = setInterval(fetchConversations, 10000)
-    
-    // Offline status listeners
+
     const handleOnline = () => {
       setIsOffline(false)
-      flushQueue() // Flush IndexedDB when back online
+      flushQueue()
       fetchConversations()
     }
     const handleOffline = () => setIsOffline(true)
-    
+
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
-    
+
     return () => {
       clearInterval(interval)
       window.removeEventListener('online', handleOnline)
@@ -65,131 +62,200 @@ export default function App() {
   }, [])
 
   const handleNewConversation = () => {
-    // Refresh conversations after a new one is created
     setTimeout(fetchConversations, 2000)
   }
 
   const tabs = [
-    { id: 'voice', label: '🎤 Voice', icon: '🎤' },
-    { id: 'camera', label: '📹 Camera', icon: '📹' },
-    { id: 'chat', label: '💬 Chat', icon: '💬' },
-    { id: 'market', label: '📈 Market', icon: '📈' },
-    { id: 'diary', label: '📒 Diary', icon: '📒' },
-    { id: 'tips', label: '💡 Tips', icon: '💡' },
-    { id: 'soil', label: '🌱 Soil', icon: '🌱' },
-    { id: 'water', label: '💧 Water', icon: '💧' },
-    { id: 'finance', label: '💰 Finance', icon: '💰' }
+    { id: 'voice', label: 'Voice Assistant', icon: '🎤' },
+    { id: 'camera', label: 'Camera Diagnosis', icon: '📹' },
+    { id: 'chat', label: 'AI Chat', icon: '💬' },
+    { id: 'market', label: 'Market Intelligence', icon: '📈' },
+    { id: 'diary', label: 'Farm Diary', icon: '📒' },
+    { id: 'tips', label: 'Daily Tips', icon: '💡' },
+    { id: 'soil', label: 'Soil Health', icon: '🌱' },
+    { id: 'water', label: 'Irrigation', icon: '💧' },
+    { id: 'finance', label: 'Finance Hub', icon: '💰' }
   ]
 
   return (
     <div className="app">
       <header className="app-header">
-        <div className="header-content">
-          <h1>🌾 KrishiBondhu</h1>
-          <p className="subtitle">Your intelligent farming assistant - Ask questions, share images, or chat anytime!</p>
-          
-          {/* Agent Status Indicator */}
-          <div className="status-indicators">
-             <span className={`ws-status ${isConnected ? 'connected' : 'disconnected'}`}>
-               {isConnected ? `🟢 Connected: ${agentStatus}` : '🔴 Reconnecting...'}
-             </span>
-             {isOffline && <span className="offline-banner">⚠️ Offline Mode. Data will sync when connected.</span>}
+        <div className="header-inner">
+          <div className="brand-block">
+            <div className="brand-mark">🌾</div>
+            <div className="brand-text">
+              <h1>KrishiBondhu</h1>
+              <p className="subtitle">Your intelligent farming companion for crop care, finance, soil, irrigation, and markets.</p>
+            </div>
+          </div>
+
+          <div className="header-status">
+            <span className={`status-pill ${isConnected ? 'online' : 'offline'}`}>
+              {isConnected ? `🟢 ${agentStatus || 'Agent ready'}` : '🔴 Reconnecting...'}
+            </span>
+            {isOffline && <span className="offline-banner">Offline mode enabled — actions will sync when you're back online.</span>}
+          </div>
+        </div>
+
+        <div className="hero-panel">
+          <div className="hero-copy">
+            <h2>Ask, analyze, and act with confidence from one farming dashboard.</h2>
+            <p>Voice, camera, chat, market data, farm finance, soil health and irrigation advice—all designed for the modern farmer.</p>
+            <div className="hero-actions">
+              <button className={`hero-action ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>Start Chat</button>
+              <button className={`hero-action ${activeTab === 'market' ? 'active' : ''}`} onClick={() => setActiveTab('market')}>Check Markets</button>
+            </div>
+          </div>
+          <div className="hero-stats">
+            <div className="stat-card">
+              <strong>9</strong>
+              <span>Smart tools</span>
+            </div>
+            <div className="stat-card">
+              <strong>Offline</strong>
+              <span>Queue support</span>
+            </div>
+            <div className="stat-card">
+              <strong>24/7</strong>
+              <span>AI guidance</span>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="app-main">
-        <div className="container p-4">
-          {/* Tab Navigation */}
-          <div className="tabs-container">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
-          </div>
+        <div className="container">
+          <div className="layout-grid">
+            <aside className="side-panel">
+              <div className="panel-card glassmorphism">
+                <div className="panel-title">Toolset</div>
+                <p className="panel-copy">One tap access to every KrishiBondhu capability.</p>
+                <div className="tab-list">
+                  {tabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                    >
+                      <span>{tab.icon}</span>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div className="main-content grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-            {/* Main Content Area */}
-            <section className="content-section">
-              <div className="modern-card">
+              <div className="panel-card glassmorphism quick-guide">
+                <h3>How to use</h3>
+                <ul>
+                  <li>📷 Capture crop images for instant diagnosis</li>
+                  <li>💬 Chat in Bengali or English</li>
+                  <li>📝 Save entries in the Farm Diary</li>
+                  <li>📈 Compare market advice before selling</li>
+                </ul>
+              </div>
+            </aside>
+
+            <section className="content-area">
+              <div className="content-card glassmorphism">
                 {activeTab === 'voice' && (
                   <>
-                    <h2 className="text-2xl font-bold mb-4">Voice Assistant</h2>
+                    <h2>🎤 Voice Farming Assistant</h2>
+                    <p className="section-description">Record a question and receive fast guidance from KrishiBondhu.</p>
                     <Recorder onConversationComplete={handleNewConversation} />
                   </>
                 )}
-                {/* ... other tab content ... */}
-
-                {/* Image tab removed to avoid duplicate upload option while using chat */}
 
                 {activeTab === 'camera' && (
                   <>
-                    <h2>📹 Live Camera</h2>
-                    <p className="section-description">
-                      Use your device camera to capture and analyze crop problems in real-time.
-                      Perfect for on-field diagnosis.
-                    </p>
+                    <h2>📹 Camera Crop Diagnosis</h2>
+                    <p className="section-description">Capture live crop images for disease and nutrient analysis.</p>
                     <CameraCapture onCaptureComplete={handleNewConversation} />
                   </>
                 )}
 
                 {activeTab === 'chat' && (
                   <>
-                    <h2>💬 Chat Assistant</h2>
-                    <p className="section-description">
-                      Chat with our AI assistant anytime. Ask questions, get advice, or attach
-                      images for analysis. Available 24/7!
-                    </p>
+                    <h2>💬 AI Chat Assistant</h2>
+                    <p className="section-description">Ask a farming question anytime — in Bengali or English.</p>
                     <Chatbot onMessageComplete={handleNewConversation} />
                   </>
                 )}
 
-                {activeTab === 'market' && <MarketIntelligence />}
-                {activeTab === 'diary' && <FarmDiary />}
-                {activeTab === 'tips' && <DailyTips />}
-                {activeTab === 'soil' && <SoilHealth userId="user_123" />}
-                {activeTab === 'water' && <WaterIrrigation userId="user_123" />}
-                {activeTab === 'finance' && <FinanceHub userId="user_123" />}
+                {activeTab === 'market' && (
+                  <>
+                    <h2>📈 Market Intelligence</h2>
+                    <p className="section-description">Receive crop-specific pricing and selling strategy advice.</p>
+                    <MarketIntelligence />
+                  </>
+                )}
+
+                {activeTab === 'diary' && (
+                  <>
+                    <h2>📒 Farm Diary</h2>
+                    <p className="section-description">Log expenses, income, and field notes in one place.</p>
+                    <FarmDiary />
+                  </>
+                )}
+
+                {activeTab === 'tips' && (
+                  <>
+                    <h2>💡 Daily Tips & Alerts</h2>
+                    <p className="section-description">Get weather-aware pest alerts and daily crop care guidance.</p>
+                    <DailyTips />
+                  </>
+                )}
+
+                {activeTab === 'soil' && (
+                  <>
+                    <h2>🌱 Soil Health Advisor</h2>
+                    <p className="section-description">Analyze soil needs and improve crop nutrition.</p>
+                    <SoilHealth userId="user_123" />
+                  </>
+                )}
+
+                {activeTab === 'water' && (
+                  <>
+                    <h2>💧 Irrigation Guidance</h2>
+                    <p className="section-description">Get daily water-use recommendations based on local moisture data.</p>
+                    <WaterIrrigation userId="user_123" />
+                  </>
+                )}
+
+                {activeTab === 'finance' && (
+                  <>
+                    <h2>💰 Finance Hub</h2>
+                    <p className="section-description">Explore credit, subsidies, and crop finance options.</p>
+                    <FinanceHub userId="user_123" />
+                  </>
+                )}
               </div>
             </section>
 
-            {/* Conversation History Sidebar */}
-            <section className="history-section">
-              <div className="card">
-                <div className="section-header">
-                  <h2>📋 History</h2>
-                  <button
-                    onClick={fetchConversations}
-                    className="refresh-btn"
-                    disabled={loading}
-                    title="Refresh conversations"
-                  >
-                    {loading ? '🔄' : '↻'}
+            <aside className="history-panel">
+              <div className="panel-card glassmorphism history-card">
+                <div className="history-header">
+                  <div>
+                    <h2>Conversation History</h2>
+                    <p>Review and manage your recent interactions.</p>
+                  </div>
+                  <button className="refresh-btn" onClick={fetchConversations} disabled={loading}>
+                    {loading ? 'Refreshing…' : 'Refresh'}
                   </button>
                 </div>
-                {error && (
-                  <div className="error-message">
-                    ⚠️ {error}
-                  </div>
-                )}
+                {error && <div className="error-message">{error}</div>}
                 <ConversationHistory
                   conversations={conversations}
                   loading={loading}
                   onDelete={fetchConversations}
                 />
               </div>
-            </section>
+            </aside>
           </div>
         </div>
       </main>
 
       <footer className="app-footer">
-        <p>KrishiBondhu - Empowering farmers with AI technology 🌾🤖</p>
+        <p>KrishiBondhu — Intelligent agriculture for every farmer.</p>
       </footer>
     </div>
   )

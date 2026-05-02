@@ -85,3 +85,20 @@ class InsuranceQuote(Base):
     premium_estimate = Column(Float, nullable=True)
     payout_triggers = Column(Text, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+class MarketPrice(Base):
+    __tablename__ = "market_prices"
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    crop = Column(String, nullable=False, index=True)
+    mandi = Column(String, nullable=False)
+    price_bdt_per_kg = Column(Float, nullable=False)
+    distance_km = Column(Float, nullable=True)
+    prediction_7day = Column(Float, nullable=True)
+    market_trend = Column(String, nullable=True)  # 'Uptrend', 'Downtrend', 'Stable'
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+# Import additional models so metadata includes them during migrations and runtime
+from . import community_models  # noqa: F401
+from . import marketplace_models  # noqa: F401
+from . import emergency_models  # noqa: F401

@@ -1,6 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
-from app.crews.krishi_crew import KrishiCrewOrchestrator
+from sqlalchemy.ext.asyncio import AsyncSession
+# from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
+from app.db import get_db_session
+from app.tools.market_tool import MarketPriceTool
 import logging
 
 logger = logging.getLogger("MarketAPI")
@@ -8,7 +11,8 @@ router = APIRouter()
 
 # Instantiate the orchestrator for targeted market crew usage
 # Note: In a real app we might inject this as a dependency to reuse the cache
-orchestrator = KrishiCrewOrchestrator()
+# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
+market_tool = MarketPriceTool()
 
 class MarketAdviceResponse(BaseModel):
     crop: str
@@ -18,11 +22,12 @@ class MarketAdviceResponse(BaseModel):
 async def get_market_advice(
     crop: str = Query(..., description="The name of the crop to analyze"),
     lat: float = Query(None, description="Latitude for local mandi search"),
-    lon: float = Query(None, description="Longitude for local mandi search")
+    lon: float = Query(None, description="Longitude for local mandi search"),
+    session: AsyncSession = Depends(get_db_session)
 ):
     """
     Dedicated endpoint for fetching real-time market prices, predictions,
-    and arbitrage advice for a specific crop.
+    and arbitrage advice for a specific crop. Prices are persisted for historical tracking.
     """
     try:
         logger.info(f"Market advice requested for crop: {crop} at {lat},{lon}")
@@ -45,6 +50,12 @@ async def get_market_advice(
         # The reply_text contains the final markdown advice from the Market Analyst
         advice_text = result_state.get("reply_text", "Failed to retrieve market data.")
         
+        # Persist market prices to database
+        try:
+            await market_tool.save_prices_to_db(session)
+        except Exception as e:
+            logger.warning(f"Failed to persist market prices: {e}")
+        
         return MarketAdviceResponse(
             crop=crop,
             advice=advice_text
@@ -53,3 +64,21 @@ async def get_market_advice(
     except Exception as e:
         logger.error(f"Error fetching market advice: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An error occurred while fetching market intelligence.")
+
+@router.get("/history")
+async def get_price_history(
+    crop: str = Query(..., description="The name of the crop"),
+    days: int = Query(7, description="Number of days of history to retrieve"),
+    session: AsyncSession = Depends(get_db_session)
+):
+    """
+    Retrieve historical market price data for a crop over the specified period.
+    Useful for farmers to see price trends before deciding when to sell.
+    """
+    try:
+        logger.info(f"Price history requested for crop: {crop}, days: {days}")
+        history = await market_tool.get_price_history(session, crop, days)
+        return history
+    except Exception as e:
+        logger.error(f"Error fetching price history: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve price history.")

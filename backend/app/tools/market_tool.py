@@ -2,12 +2,22 @@ from langchain.tools import BaseTool
 import pandas as pd
 from datetime import datetime, timedelta
 import random
+import asyncio
+from sqlalchemy import select, desc
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.db_models import MarketPrice
 
 class MarketPriceTool(BaseTool):
     name: str = "Market Price Fetcher and Predictor"
     description: str = "Fetches current wholesale prices for a crop in nearby mandis and provides a 7-day predicted trend."
+    db_session: AsyncSession = None  # Will be injected by the agent
     
     def _run(self, crop: str, location_lat: float = None, location_lon: float = None, **kwargs) -> str:
+        """Synchronous wrapper for market price fetching."""
+        # Since BaseTool uses sync, we wrap async logic if needed
+        return self._fetch_market_data(crop, location_lat, location_lon)
+    
+    def _fetch_market_data(self, crop: str, location_lat: float = None, location_lon: float = None) -> str:
         # Normalize crop name
         crop = str(crop).strip().lower()
         if not crop or crop == "none":
@@ -82,4 +92,72 @@ class MarketPriceTool(BaseTool):
         output += f"- Market Trend: {trend}\n\n"
         output += "Advice: Consider transport costs (avg 2-5 BDT/kg per 50km) before traveling to a distant mandi for a slightly higher price."
         
+        # Store price data in internal state for later persistence
+        self.last_prices = {
+            "crop": crop,
+            "prices": current_prices,
+            "trend": trend,
+            "prediction_7day": pred_7_day,
+            "latest_price": latest_price
+        }
+        
         return output
+    
+    async def save_prices_to_db(self, session: AsyncSession) -> None:
+        """Async method to persist market prices to the database."""
+        if not hasattr(self, 'last_prices') or not self.last_prices:
+            return
+        
+        data = self.last_prices
+        try:
+            for price_entry in data.get("prices", []):
+                market_price = MarketPrice(
+                    crop=data["crop"],
+                    mandi=price_entry["mandi"],
+                    price_bdt_per_kg=price_entry["price_bdt_per_kg"],
+                    distance_km=price_entry.get("distance_km"),
+                    prediction_7day=data.get("prediction_7day"),
+                    market_trend=data.get("trend")
+                )
+                session.add(market_price)
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            print(f"Error saving market prices: {e}")
+    
+    async def get_price_history(self, session: AsyncSession, crop: str, days: int = 7) -> dict:
+        """Retrieve historical price data for a crop from the database."""
+        try:
+            cutoff_date = datetime.now() - timedelta(days=days)
+            stmt = select(MarketPrice).where(
+                (MarketPrice.crop == crop.lower()) &
+                (MarketPrice.timestamp >= cutoff_date)
+            ).order_by(desc(MarketPrice.timestamp))
+            
+            result = await session.execute(stmt)
+            prices = result.scalars().all()
+            
+            if not prices:
+                return {"message": f"No price history found for {crop}"}
+            
+            # Group by mandi and calculate trends
+            mandis_data = {}
+            for p in prices:
+                if p.mandi not in mandis_data:
+                    mandis_data[p.mandi] = []
+                mandis_data[p.mandi].append(p.price_bdt_per_kg)
+            
+            # Calculate averages
+            mandi_avg = {mandi: round(sum(prices_list) / len(prices_list), 2) 
+                        for mandi, prices_list in mandis_data.items()}
+            
+            return {
+                "crop": crop,
+                "period_days": days,
+                "mandi_averages": mandi_avg,
+                "best_price_mandi": max(mandi_avg, key=mandi_avg.get),
+                "worst_price_mandi": min(mandi_avg, key=mandi_avg.get)
+            }
+        except Exception as e:
+            print(f"Error retrieving price history: {e}")
+            return {"error": str(e)}

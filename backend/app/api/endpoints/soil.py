@@ -6,13 +6,13 @@ import uuid
 import logging
 from app.db import get_db
 from app.models.db_models import SoilTestLog
-from app.crews.krishi_crew import KrishiCrewOrchestrator
+# from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Instantiate the orchestrator once
-orchestrator = KrishiCrewOrchestrator()
+# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
 
 class SoilAnalyzeRequest(BaseModel):
     user_id: str

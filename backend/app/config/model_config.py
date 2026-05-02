@@ -1,24 +1,25 @@
 import os
 import logging
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
-from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
-from langchain_groq import ChatGroq
+# import torch  # Temporarily commented out
+# from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig  # Lazy import
+# from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline  # Lazy import
+# from langchain_groq import ChatGroq  # Lazy import
 
 logger = logging.getLogger("ModelConfig")
 
 class ModelRegistry:
     def __init__(self):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.is_basic_space = os.getenv("SPACE_HARDWARE", "").startswith("cpu") or not torch.cuda.is_available()
+        # Lazy imports to avoid circular dependencies
+        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        # self.is_basic_space = os.getenv("SPACE_HARDWARE", "").startswith("cpu") or not torch.cuda.is_available()
         
         # 4-bit Quantization Config for heavy LLMs (requires bitsandbytes)
-        self.bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4"
-        )
+        # self.bnb_config = BitsAndBytesConfig(
+        #     load_in_4bit=True,
+        #     bnb_4bit_compute_dtype=torch.float16,
+        #     bnb_4bit_use_double_quant=True,
+        #     bnb_4bit_quant_type="nf4"
+        # )
         
         # Model IDs mapped to environment variables with hardcoded defaults
         self.MODELS = {
@@ -50,7 +51,12 @@ class ModelRegistry:
             os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for blazing fast inference.")
             if "agronomist" not in self._loaded_models:
-                self._loaded_models["agronomist"] = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
+                try:
+                    from langchain_groq import ChatGroq  # Lazy import
+                    self._loaded_models["agronomist"] = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0.7)
+                except Exception as e:
+                    logger.warning(f"Failed to load ChatGroq: {e}")
+                    return None
             return self._loaded_models["agronomist"]
 
         model_id = self.MODELS["agronomist"]["primary"]
@@ -111,7 +117,12 @@ class ModelRegistry:
             os.environ["GROQ_API_KEY"] = api_key
             logger.info("GROQ_API_KEY detected. Loading ChatGroq for interpreter.")
             if "interpreter" not in self._loaded_models:
-                self._loaded_models["interpreter"] = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.1)
+                try:
+                    from langchain_groq import ChatGroq  # Lazy import
+                    self._loaded_models["interpreter"] = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.1)
+                except Exception as e:
+                    logger.warning(f"Failed to load ChatGroq: {e}")
+                    return None
             return self._loaded_models["interpreter"]
 
         model_id = self.MODELS["multimodal_interpreter"]["primary"]

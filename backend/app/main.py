@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
 
-from app.crews.krishi_crew import KrishiCrewOrchestrator
-langgraph_app = KrishiCrewOrchestrator()
+# from app.crews.krishi_crew import KrishiCrewOrchestrator
+# langgraph_app = KrishiCrewOrchestrator()
 from app.api.utils import save_audio_local, save_image_local
-from app.services.audio import stt_node
+# from app.services.audio import stt_node
 from app.api import routes as api_routes
 from app.api.endpoints import market as market_routes
 from app.api.endpoints import diary as diary_routes
@@ -20,8 +20,12 @@ from app.api.endpoints import alerts as alerts_routes
 from app.api.endpoints import soil as soil_routes
 from app.api.endpoints import water as water_routes
 from app.api.endpoints import finance as finance_routes
+from app.api.endpoints import community as community_routes
+from app.api.endpoints import marketplace as marketplace_routes
+from app.api.endpoints import emergency as emergency_routes
 from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
+import app.models  # Register all ORM models before startup actions
 
 app = FastAPI(title="KrishiBondhu API")
 
@@ -91,6 +95,9 @@ app.include_router(alerts_routes.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(soil_routes.router, prefix="/api/soil", tags=["soil"])
 app.include_router(water_routes.router, prefix="/api/water", tags=["water"])
 app.include_router(finance_routes.router, prefix="/api/finance", tags=["finance"])
+app.include_router(community_routes.router, prefix="/api/community", tags=["community"])
+app.include_router(marketplace_routes.router, prefix="/api/marketplace", tags=["marketplace"])
+app.include_router(emergency_routes.router, prefix="/api/emergency", tags=["emergency"])
 
 # --- APScheduler Setup ---
 from apscheduler.schedulers.asyncio import AsyncIOScheduler

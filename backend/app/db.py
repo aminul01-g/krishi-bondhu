@@ -56,3 +56,8 @@ async def get_db():
             await session.close()
         except Exception as e:
             print(f"Error closing database session: {e}")
+
+
+async def get_db_session():
+    async for session in get_db():
+        yield session

@@ -7,12 +7,12 @@ import logging
 
 from app.db import get_db
 from app.models.db_models import FarmDiary, User
-from app.crews.krishi_crew import KrishiCrewOrchestrator
+# from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
 
 logger = logging.getLogger("DiaryAPI")
 router = APIRouter()
 
-orchestrator = KrishiCrewOrchestrator()
+# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
 
 class DiaryEntryRequest(BaseModel):
     user_id: str

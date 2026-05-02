@@ -6,12 +6,12 @@ import logging
 
 from app.db import get_db
 from app.models.db_models import CuratedTip, User
-from app.crews.krishi_crew import KrishiCrewOrchestrator
+# from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
 
 logger = logging.getLogger("AlertsAPI")
 router = APIRouter()
 
-orchestrator = KrishiCrewOrchestrator()
+# orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
 
 class DailyAlertResponse(BaseModel):
     user_id: str

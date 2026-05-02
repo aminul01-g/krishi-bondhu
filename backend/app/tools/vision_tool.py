@@ -3,7 +3,7 @@ from pydantic import Field
 from transformers import pipeline
 from PIL import Image
 import os
-from app.config.model_config import model_registry
+# from app.config.model_config import model_registry  # Lazy import to avoid circular deps
 
 class LocalVisionDiseaseTool(BaseTool):
     name: str = "Local Image Disease Analyzer"

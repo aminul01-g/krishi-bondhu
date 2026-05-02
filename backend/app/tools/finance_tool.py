@@ -4,6 +4,8 @@ import os
 import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.db_models import FarmDiary
 import asyncio
 
 logger = logging.getLogger("FinanceTools")
@@ -34,7 +36,7 @@ class SubsidyNavigatorTool(BaseTool):
                     eligible.append(s)
                     
         if not eligible:
-            return "দুঃখিত, আপনার দেওয়া তথ্যের ভিত্তিতে এই মুহূর্তে কোনো উপযুক্ত সরকারি স্কিম পাওয়া যায়নি।"
+            return "দুঃখিত, আপনার দেওয়া তথ্যের ভিত্তিতে এই মুহূর্তে কোনো উপযুক্ত সরকারি স্কিম পাওয়া যায়নি।"
             
         output = "আপনার জন্য প্রযোজ্য সরকারি স্কিমসমূহ:\n\n"
         for s in eligible:
@@ -48,39 +50,118 @@ class SubsidyNavigatorTool(BaseTool):
 class CreditScoringTool(BaseTool):
     name: str = "Credit Readiness Scorer"
     description: str = "Calculates a 0-100 credit readiness score based on farm diary logs (consistency, profitability, completeness)."
+    db_session: AsyncSession = None  # Will be injected
     
     def _run(self, user_id: str) -> str:
-        # In a real tool with DB access, we would run the query here.
-        # Since tools are sync and our DB is async, we'll use a helper to run the async query.
+        """Synchronous wrapper for credit scoring."""
+        # Since this is sync, provide wrapper
+        # The real implementation is in async calculate_credit_score()
+        return f"Credit scoring initiated for user {user_id}. Use async endpoint for real results."
+    
+    async def calculate_credit_score(self, session: AsyncSession, user_id: str) -> dict:
+        """
+        Real credit scoring logic based on farm diary data.
         
-        # MOCK LOGIC FOR PROTOTYPE
-        # In a production version, we would fetch data from 'farm_diary' table.
-        # Here we simulate the scoring based on a mock check.
-        
-        # points = 0
-        # 1. Consistency (Weekly logging) -> 40 pts
-        # 2. Profitability (Income > Expense) -> 30 pts
-        # 3. Completeness (Notes/Metadata) -> 30 pts
-        
-        score = 75 # Mock score
-        breakdown = (
-            "- তথ্যের ধারাবাহিকতা: ২৫/৪০ (গত মাসে ৩ সপ্তাহ লগ করেছেন)\n"
-            "- লাভজনকতা: ৩০/৩০ (আপনার আয় ব্যয়ের চেয়ে বেশি)\n"
-            "- তথ্যের পূর্ণতা: ২০/৩০ (কিছু এন্ট্রিতে নোট যুক্ত করা হয়নি)"
-        )
-        
-        output = f"আপনার ক্রেডিট রেডিনেস স্কোর: {score}/১০০\n\n"
-        output += "বিশ্লেষণ:\n"
-        output += breakdown + "\n\n"
-        
-        if score >= 80:
-            output += "পরামর্শ: আপনার রেকর্ড খুবই ভালো। আপনি কৃষি ঋণের জন্য ব্যাংকে আবেদন করতে পারেন।"
-        elif score >= 50:
-            output += "পরামর্শ: ঋণের জন্য আপনার রেকর্ড সন্তোষজনক। তবে আরও নিয়মিত তথ্য যোগ করলে ভালো হয়।"
-        else:
-            output += "পরামর্শ: ঋণের আবেদন করার আগে নিয়মিত অন্তত ৩ মাস আপনার আয়-ব্যয় ডায়েরিতে লিখে রাখুন।"
+        Scoring breakdown:
+        - Consistency (40 pts): Weekly logging frequency over past 90 days
+        - Profitability (30 pts): Ratio of total income to total expenses
+        - Completeness (30 pts): Percentage of entries with notes/crop/plot data
+        """
+        try:
+            # Fetch all diary entries for the user in past 90 days
+            cutoff_date = datetime.now() - timedelta(days=90)
+            stmt = select(FarmDiary).where(
+                (FarmDiary.user_id == user_id) &
+                (FarmDiary.date >= cutoff_date)
+            ).order_by(FarmDiary.date)
             
-        return output
+            result = await session.execute(stmt)
+            entries = result.scalars().all()
+            
+            if not entries:
+                return {
+                    "score": 0,
+                    "breakdown": {
+                        "consistency": 0,
+                        "profitability": 0,
+                        "completeness": 0
+                    },
+                    "message": "নোটঃ কোনো ডায়েরি এন্ট্রি পাওয়া যায়নি। অন্তত ২ সপ্তাহ নিয়মিত এন্ট্রি যোগ করলে আপনার ক্রেডিট স্কোর গণনা করা যাবে।"
+                }
+            
+            # 1. CONSISTENCY SCORING (40 pts)
+            # Calculate logging frequency - aim for 2+ entries per week = 40 pts
+            days_tracked = (entries[-1].date - entries[0].date).days + 1 if len(entries) > 1 else 1
+            weeks_tracked = max(days_tracked / 7, 1)
+            avg_entries_per_week = len(entries) / weeks_tracked
+            consistency_score = min(40, int(avg_entries_per_week * 10))  # Max 40 pts
+            
+            # 2. PROFITABILITY SCORING (30 pts)
+            total_income = 0
+            total_expense = 0
+            for entry in entries:
+                if entry.entry_type == "income":
+                    total_income += entry.amount
+                elif entry.entry_type == "expense":
+                    total_expense += entry.amount
+            
+            if total_expense == 0:
+                profitability_score = 30  # If no expenses logged, full score
+            else:
+                profit_ratio = total_income / total_expense if total_expense > 0 else 0
+                if profit_ratio >= 1.2:  # 20%+ profit = full score
+                    profitability_score = 30
+                elif profit_ratio >= 1.0:  # Break-even or slight profit
+                    profitability_score = 20
+                elif profit_ratio >= 0.8:  # Up to 20% loss
+                    profitability_score = 10
+                else:  # More than 20% loss
+                    profitability_score = 0
+            
+            # 3. COMPLETENESS SCORING (30 pts)
+            complete_entries = sum(
+                1 for e in entries
+                if e.crop and e.plot and e.notes and len(str(e.notes).strip()) > 5
+            )
+            completeness_score = int((complete_entries / len(entries)) * 30) if entries else 0
+            
+            # Total score
+            total_score = consistency_score + profitability_score + completeness_score
+            
+            # Generate recommendation
+            if total_score >= 80:
+                recommendation = "চমৎকার! আপনার কৃষি ব্যবসা ভালো পথে চলছে। আপনি সহজেই কৃষি ঋণের জন্য ব্যাংকে আবেদন করতে পারেন।"
+            elif total_score >= 60:
+                recommendation = "ভালো ফলাফল। আরও ৩-৪ মাস নিয়মিত ডায়েরি রেখে আপনার স্কোর উন্নত করতে পারেন। তার পর ঋণের আবেদন করুন।"
+            elif total_score >= 40:
+                recommendation = "আপনার ডায়েরি রেকর্ড সন্তোষজনক কিন্তু আরও উন্নতির সুযোগ আছে। প্রতি সপ্তাহে অন্তত ২টি এন্ট্রি যোগ করুন এবং সব এন্ট্রিতে বিস্তারিত নোট লিখুন।"
+            else:
+                recommendation = "আপনার ডায়েরি রেকর্ড এখনো খুব দুর্বল। অন্তত ৬ মাস নিয়মিত দৈনিক/সাপ্তাহিক এন্ট্রি যোগ করুন তার পর ঋণের আবেদন করুন।"
+            
+            return {
+                "score": total_score,
+                "breakdown": {
+                    "consistency": consistency_score,
+                    "profitability": profitability_score,
+                    "completeness": completeness_score
+                },
+                "metrics": {
+                    "total_income": total_income,
+                    "total_expense": total_expense,
+                    "net_profit": total_income - total_expense,
+                    "entries_count": len(entries),
+                    "avg_entries_per_week": round(avg_entries_per_week, 2)
+                },
+                "recommendation": recommendation
+            }
+        
+        except Exception as e:
+            logger.error(f"Error calculating credit score: {e}")
+            return {
+                "score": 0,
+                "error": str(e),
+                "message": "ক্রেডিট স্কোর গণনা করতে সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।"
+            }
 
 class InsuranceQuoteTool(BaseTool):
     name: str = "Micro-Insurance Quoter"
@@ -96,13 +177,13 @@ class InsuranceQuoteTool(BaseTool):
         premium = round(land_size * base_rate * 0.05, 2)
         payout_max = land_size * base_rate * 10
         
-        output = f"--- আবহাওয়া ভিত্তিক বীমা উদ্ধৃতি ({crop}) ---\n"
+        output = f"--- আবহাওয়া ভিত্তিক বীমা উদ্ধৃতি ({crop}) ---\n"
         output += f"জমির পরিমাণ: {land_size} শতাংশ\n"
-        output += f"সম্ভাব্য প্রিমিয়াম: {premium} টাকা\n"
+        output += f"সম্ভাব্য প্রিমিয়াম: {premium} টাকা\n"
         output += f"সর্বোচ্চ ক্ষতিপূরণ: {payout_max} টাকা\n\n"
         output += "ক্ষতিপূরণের শর্তসমূহ (Payout Triggers):\n"
         output += "- টানা ১৫ দিন বৃষ্টি না হলে (খরা)।\n"
         output += "- এক দিনে ১০০ মি.মি. এর বেশি বৃষ্টি হলে (অতিবৃষ্টি)।\n"
-        output += "- ঝড়ে ফসলের ৫০% এর বেশি ক্ষতি হলে।"
+        output += "- ঝড়ে ফসলের ৫০% এর বেশি ক্ষতি হলে।"
         
         return output
