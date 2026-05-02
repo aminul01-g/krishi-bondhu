@@ -49,6 +49,11 @@ dependencies = [
     "beautifulsoup4>=4.12.3",
     "pandas>=2.0.0",
     "httpx>=0.26.0",
+    
+    # KrishiBondhu Phase 3 Features
+    "sentence-transformers>=2.3.1",
+    "pyzbar>=0.1.9",
+    "pytesseract>=0.3.10",
 ]
 
 [build-system]

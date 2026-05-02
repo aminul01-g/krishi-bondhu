@@ -9,6 +9,9 @@ import DailyTips from './components/DailyTips'
 import SoilHealth from './components/SoilHealth'
 import WaterIrrigation from './components/WaterIrrigation'
 import FinanceHub from './components/FinanceHub'
+import CommunityQA from './components/CommunityQA'
+import Marketplace from './components/Marketplace'
+import EmergencySupport from './components/EmergencySupport'
 import { API_BASE } from './api'
 import { useAgentSocket } from './hooks/useAgentSocket'
 import { flushQueue } from './services/offlineQueue'
@@ -74,7 +77,10 @@ export default function App() {
     { id: 'tips', label: 'Daily Tips', icon: '💡' },
     { id: 'soil', label: 'Soil Health', icon: '🌱' },
     { id: 'water', label: 'Irrigation', icon: '💧' },
-    { id: 'finance', label: 'Finance Hub', icon: '💰' }
+    { id: 'finance', label: 'Finance Hub', icon: '💰' },
+    { id: 'community', label: 'Community Q&A', icon: '👥' },
+    { id: 'marketplace', label: 'Marketplace', icon: '🛒' },
+    { id: 'emergency', label: 'Emergency', icon: '🚨' }
   ]
 
   return (
@@ -108,7 +114,7 @@ export default function App() {
           </div>
           <div className="hero-stats">
             <div className="stat-card">
-              <strong>9</strong>
+              <strong>12</strong>
               <span>Smart tools</span>
             </div>
             <div className="stat-card">
@@ -226,6 +232,30 @@ export default function App() {
                     <h2>💰 Finance Hub</h2>
                     <p className="section-description">Explore credit, subsidies, and crop finance options.</p>
                     <FinanceHub userId="user_123" />
+                  </>
+                )}
+
+                {activeTab === 'community' && (
+                  <>
+                    <h2>👥 Community Q&A</h2>
+                    <p className="section-description">Ask questions, share knowledge, and consult local experts.</p>
+                    <CommunityQA />
+                  </>
+                )}
+
+                {activeTab === 'marketplace' && (
+                  <>
+                    <h2>🛒 Input Marketplace</h2>
+                    <p className="section-description">Find authentic dealers and verify seeds or fertilizers.</p>
+                    <Marketplace />
+                  </>
+                )}
+
+                {activeTab === 'emergency' && (
+                  <>
+                    <h2>🚨 Emergency Response</h2>
+                    <p className="section-description">Report crop damage for insurance or contact national helplines.</p>
+                    <EmergencySupport />
                   </>
                 )}
               </div>

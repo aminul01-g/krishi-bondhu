@@ -12,6 +12,9 @@ route_query_task:
     8. 'soil': The user is asking to analyze soil images or interpret physical DIY soil tests.
     9. 'water': The user is asking for irrigation advice, soil moisture status, or water-related alerts (flood/drought).
     10. 'finance': The user is asking about government subsidies, how to apply for a Krishi Card, crop insurance, or their credit readiness score.
+    11. 'community': The user is asking a question to the community, wants to see if others had this issue, or wants expert escalation.
+    12. 'marketplace': The user wants to buy seeds/fertilizers, find a dealer, or verify a product barcode/label.
+    13. 'emergency': The user is reporting disaster damage (flood, cyclone), filing an insurance claim, or wants to call a helpline.
   expected_output: >
     You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
     The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
@@ -103,3 +106,40 @@ finance_navigator_task:
   expected_output: >
     A detailed guide in Bengali explaining how to apply for specific subsidies, or a credit report with a 0-100 score, or a personalized insurance quote.
   agent: finance_advisor_agent
+
+community_qa_task:
+  description: >
+    The user is asking a question to the community: '{user_input}'.
+    First, use your Community Search tool to find similar past questions and answers.
+    If a good answer exists, summarize it in Bengali and provide it to the user.
+    If no good answer exists, state that you will escalate it to an expert and use the Escalate tool (use a mock question_id like 'q_123' if needed, and location '{gps}').
+  expected_output: >
+    A Bengali response summarizing past community answers or confirming that the question has been escalated to a local expert.
+  agent: community_connector_agent
+
+marketplace_task:
+  description: >
+    The user wants to find or verify agricultural inputs.
+    Input: '{user_input}'
+    Location: '{gps}'
+    Image: '{image_path}'
+    If they are looking for a product (e.g. 'urea fertilizer'), use the Dealer Search Tool.
+    If they provided a barcode or image of a barcode, use the Product Verification Tool.
+    If they uploaded a photo of a label to read the ingredients, use the Label Scanner Tool.
+  expected_output: >
+    A Bengali response detailing nearby dealers, or the verification status (Green/Yellow/Red) of a product.
+  agent: procurement_advisor_agent
+
+emergency_task:
+  description: >
+    The user is reporting an agricultural emergency or damage: '{user_input}'.
+    Location: '{gps}'
+    Image: '{image_path}'
+    First, use the Assess Crop Damage tool to get a percentage estimate from the image.
+    Then, use the Generate Damage Report tool to compile everything into an official record.
+    Finally, use the SMS Share tool to send a confirmation or share the report.
+    If they just want to call the helpline, provide the number (e.g., 3331) and instructions.
+  expected_output: >
+    A supportive Bengali response confirming the damage report has been filed, along with the report ID and next steps.
+  agent: emergency_response_agent
+

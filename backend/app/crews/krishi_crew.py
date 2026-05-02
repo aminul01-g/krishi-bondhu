@@ -12,6 +12,9 @@ from app.tools.alert_tool import PestRiskTool
 from app.tools.soil_tool import SoilVisionTool, DIYSoilTestTool, RecommendFertilizerTool
 from app.tools.irrigation_tool import SatelliteMoistureTool, WaterBalanceTool, FloodDroughtAlertTool
 from app.tools.finance_tool import SubsidyNavigatorTool, CreditScoringTool, InsuranceQuoteTool
+from app.tools.community_tool import CommunitySearchTool, EscalateToExpertTool
+from app.tools.marketplace_tool import DealerSearchTool, ProductVerificationTool, LabelScannerTool
+from app.tools.emergency_tool import CropDamageAssessmentTool, DamageReportGeneratorTool, SMSShareTool
 
 # 1. Setup Structured Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -46,6 +49,14 @@ class KrishiCrewOrchestrator:
         self.subsidy_tool = SubsidyNavigatorTool()
         self.credit_tool = CreditScoringTool()
         self.insurance_tool = InsuranceQuoteTool()
+        self.community_search_tool = CommunitySearchTool()
+        self.escalate_tool = EscalateToExpertTool()
+        self.dealer_tool = DealerSearchTool()
+        self.product_verify_tool = ProductVerificationTool()
+        self.label_scanner_tool = LabelScannerTool()
+        self.damage_assessment_tool = CropDamageAssessmentTool()
+        self.damage_report_tool = DamageReportGeneratorTool()
+        self.sms_share_tool = SMSShareTool()
         
         logger.info("KrishiCrewOrchestrator initialized with memory and caching.")
 
@@ -65,10 +76,13 @@ class KrishiCrewOrchestrator:
         soil_scientist_agent = Agent(config=self.agents_config["soil_scientist_agent"], llm=agronomist_llm, tools=[self.soil_vision_tool, self.diy_soil_tool, self.recommend_fertilizer_tool], allow_delegation=False, verbose=True)
         water_analyst_agent = Agent(config=self.agents_config["water_analyst_agent"], llm=agronomist_llm, tools=[self.satellite_moisture_tool, self.water_balance_tool, self.water_hazard_tool], allow_delegation=False, verbose=True)
         finance_advisor_agent = Agent(config=self.agents_config["finance_advisor_agent"], llm=agronomist_llm, tools=[self.subsidy_tool, self.credit_tool, self.insurance_tool], allow_delegation=False, verbose=True)
-        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent
+        community_connector_agent = Agent(config=self.agents_config["community_connector_agent"], llm=agronomist_llm, tools=[self.community_search_tool, self.escalate_tool], allow_delegation=False, verbose=True)
+        procurement_advisor_agent = Agent(config=self.agents_config["procurement_advisor_agent"], llm=agronomist_llm, tools=[self.dealer_tool, self.product_verify_tool, self.label_scanner_tool], allow_delegation=False, verbose=True)
+        emergency_response_agent = Agent(config=self.agents_config["emergency_response_agent"], llm=agronomist_llm, tools=[self.damage_assessment_tool, self.damage_report_tool, self.sms_share_tool], allow_delegation=False, verbose=True)
+        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent, community_connector_agent, procurement_advisor_agent, emergency_response_agent
 
     def _create_tasks(self, agents):
-        router, agronomist, pathologist, weather, market, farm_manager, alert_advisor, soil_scientist, water_analyst, finance_advisor = agents
+        router, agronomist, pathologist, weather, market, farm_manager, alert_advisor, soil_scientist, water_analyst, finance_advisor, community_connector, procurement_advisor, emergency_response = agents
         
         # Prepare task configurations with the agent objects
         self.tasks_config["route_query_task"]["agent"] = router
@@ -81,6 +95,9 @@ class KrishiCrewOrchestrator:
         self.tasks_config["soil_analysis_task"]["agent"] = soil_scientist
         self.tasks_config["irrigation_advice_task"]["agent"] = water_analyst
         self.tasks_config["finance_navigator_task"]["agent"] = finance_advisor
+        self.tasks_config["community_qa_task"]["agent"] = community_connector
+        self.tasks_config["marketplace_task"]["agent"] = procurement_advisor
+        self.tasks_config["emergency_task"]["agent"] = emergency_response
         
         route_task = Task(config=self.tasks_config["route_query_task"])
         disease_task = Task(config=self.tasks_config["disease_diagnosis_task"])
@@ -92,8 +109,11 @@ class KrishiCrewOrchestrator:
         soil_task = Task(config=self.tasks_config["soil_analysis_task"])
         water_task = Task(config=self.tasks_config["irrigation_advice_task"])
         finance_task = Task(config=self.tasks_config["finance_navigator_task"])
+        community_task = Task(config=self.tasks_config["community_qa_task"])
+        marketplace_task = Task(config=self.tasks_config["marketplace_task"])
+        emergency_task = Task(config=self.tasks_config["emergency_task"])
         
-        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task]
+        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task, community_task, marketplace_task, emergency_task]
 
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
@@ -128,8 +148,8 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent = agents_tuple
-        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task = tasks_list
+        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent, community_connector_agent, procurement_advisor_agent, emergency_response_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task, community_task, marketplace_task, emergency_task = tasks_list
 
         import asyncio
         import json
@@ -203,6 +223,21 @@ class KrishiCrewOrchestrator:
                 logger.info("Routing to Finance Advisor Agent...")
                 finance_crew = Crew(agents=[finance_advisor_agent], tasks=[finance_task], verbose=True, step_callback=sync_step_callback)
                 result = await asyncio.to_thread(finance_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "community":
+                logger.info("Routing to Community Connector Agent...")
+                community_crew = Crew(agents=[community_connector_agent], tasks=[community_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(community_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "marketplace":
+                logger.info("Routing to Procurement Advisor Agent...")
+                marketplace_crew = Crew(agents=[procurement_advisor_agent], tasks=[marketplace_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(marketplace_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "emergency":
+                logger.info("Routing to Emergency Response Agent...")
+                emergency_crew = Crew(agents=[emergency_response_agent], tasks=[emergency_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(emergency_crew.kickoff, inputs=inputs)
                 final_text = str(result)
             else:
                 logger.info("Routing to Agronomist Agent...")

@@ -21,7 +21,7 @@ An intelligent, beautiful agricultural assistant designed specifically for farme
 | Component | Status | Details |
 |-----------|--------|---------|
 | **Backend** | ✅ Complete | 25 API routes, 3 agent systems, SQLAlchemy ORM, async PostgreSQL |
-| **Frontend UI** | ✅ Complete | 9 integrated tools, glassmorphic design, PWA, responsive |
+| **Frontend UI** | ✅ Complete | 12 integrated tools, glassmorphic design, PWA, responsive |
 | **AI Models** | ✅ Complete | CrewAI crew, 6+ agents, local HF models, LangChain integration |
 | **Database** | ⏳ Ready | PostgreSQL schema, pgvector, migrations prepared (defer deploy) |
 | **Deployment** | 🚀 Ready | Docker Compose, Hugging Face Spaces, local development |
@@ -40,6 +40,9 @@ An intelligent, beautiful agricultural assistant designed specifically for farme
 | **Soil Health** | 🌱 | Analyze soil needs and get fertilizer recommendations |
 | **Irrigation Guide** | 💧 | Daily water management advice based on moisture data |
 | **Finance Hub** | 💰 | Explore credits, subsidies, and crop insurance options |
+| **Community Q&A** | 👥 | Ask questions, share knowledge, and consult local experts |
+| **Input Marketplace** | 🛒 | Find authentic dealers and verify seeds or fertilizers |
+| **Emergency Support** | 🚨 | Report crop damage for insurance or contact national helplines |
 
 ---
 

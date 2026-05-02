@@ -20,13 +20,13 @@ def upgrade() -> None:
     op.create_table(
         'market_prices',
         sa.Column('id', sa.String(), nullable=False),
-        sa.Column('crop', sa.String(), nullable=False, index=True),
+        sa.Column('crop', sa.String(), nullable=False),
         sa.Column('mandi', sa.String(), nullable=False),
         sa.Column('price_bdt_per_kg', sa.Float(), nullable=False),
         sa.Column('distance_km', sa.Float(), nullable=True),
         sa.Column('prediction_7day', sa.Float(), nullable=True),
         sa.Column('market_trend', sa.String(), nullable=True),
-        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True, index=True),
+        sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_market_prices_id'), 'market_prices', ['id'], unique=False)
