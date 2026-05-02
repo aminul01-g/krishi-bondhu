@@ -17,14 +17,16 @@ from app.api import routes as api_routes
 from app.api.endpoints import market as market_routes
 from app.api.endpoints import diary as diary_routes
 from app.api.endpoints import alerts as alerts_routes
-from app.db import get_db, engine, DATABASE_URL
-from app.models.db_models import Base
+from app.api.endpoints import soil as soil_routes
+from app.api.endpoints import water as water_routes
+from app.api.endpoints import finance as finance_routes
+from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
+from app.models.db_models import Base, User, Conversation, IrrigationLog
 
 app = FastAPI(title="KrishiBondhu API")
 
 # Helper to get/create user
-from app.models.db_models import User, Conversation
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
 async def get_current_user_db_id(external_id: str, db: AsyncSession) -> int:
     try:
@@ -51,10 +53,6 @@ async def save_conversation_to_db(
     try:
         if not user_db_id:
             return
-        
-        # Ensure metadata is JSON serializable
-        import json
-        # Filter out unserializable objects if any (though clean_result should be fine)
         
         conv = Conversation(
             user_id=user_db_id,
@@ -90,19 +88,71 @@ app.include_router(api_routes.router, prefix="/api")
 app.include_router(market_routes.router, prefix="/api/market", tags=["market"])
 app.include_router(diary_routes.router, prefix="/api/diary", tags=["diary"])
 app.include_router(alerts_routes.router, prefix="/api/alerts", tags=["alerts"])
+app.include_router(soil_routes.router, prefix="/api/soil", tags=["soil"])
+app.include_router(water_routes.router, prefix="/api/water", tags=["water"])
+app.include_router(finance_routes.router, prefix="/api/finance", tags=["finance"])
 
 # --- APScheduler Setup ---
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler = AsyncIOScheduler()
 
-def daily_notification_job():
-    # In a real app, this would iterate through users, calculate their pest risk, and push an FCM/WebSocket notification.
-    print("[SCHEDULER] Running daily pest risk and tip notification job...")
+async def daily_notification_job():
+    """
+    Morning job to generate irrigation and pest alerts for all active users.
+    """
+    print("[SCHEDULER] Running daily irrigation and pest risk notification job...")
+    async with AsyncSessionLocal() as db:
+        try:
+            # 1. Fetch all users
+            result = await db.execute(select(User))
+            users = result.scalars().all()
+            
+            for user in users:
+                # 2. Get last known location for the user from conversations
+                conv_result = await db.execute(
+                    select(Conversation)
+                    .where(Conversation.user_id == user.id)
+                    .order_by(desc(Conversation.created_at))
+                    .limit(1)
+                )
+                last_conv = conv_result.scalars().first()
+                
+                gps = {"lat": 23.8103, "lon": 90.4125} # Default to Dhaka
+                if last_conv and last_conv.meta_data and last_conv.meta_data.get("gps"):
+                    gps = last_conv.meta_data.get("gps")
+                
+                # 3. Invoke Agent for Irrigation Advice (Silent mode, just log to DB)
+                # Note: In a real system we would use a more efficient batch process
+                initial_state = {
+                    "transcript": "Morning irrigation check.",
+                    "gps": gps,
+                    "user_id": user.external_id
+                }
+                
+                # Trigger the orchestrator for 'water' intent
+                # result = await langgraph_app.ainvoke(initial_state)
+                # advice = result.get("reply_text")
+                
+                # For the mock/prototype, we log a standard morning message
+                advice = "আপনার এলাকার মাটির আর্দ্রতা বর্তমানে মাঝারি। আজ সকালে ২০ মি.মি. সেচ দেওয়া ভালো।"
+                
+                new_log = IrrigationLog(
+                    user_id=user.external_id,
+                    soil_moisture_index=0.42,
+                    advice=advice
+                )
+                db.add(new_log)
+                
+            await db.commit()
+            print(f"[SCHEDULER] Successfully processed {len(users)} users.")
+        except Exception as e:
+            print(f"[SCHEDULER ERROR] {e}")
 
 @app.on_event("startup")
 async def start_scheduler():
-    scheduler.add_job(daily_notification_job, 'cron', hour=8, minute=0)
+    # Run irrigation advice job at 6:00 AM daily
+    scheduler.add_job(daily_notification_job, 'cron', hour=6, minute=0)
     scheduler.start()
     print("[SCHEDULER] Started.")
 

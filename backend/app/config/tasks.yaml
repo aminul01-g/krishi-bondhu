@@ -9,6 +9,9 @@ route_query_task:
     5. 'diary': The user is logging an expense, income, or harvest yield.
     6. 'alerts': The user is asking for their daily tip, pest risk, or current alerts.
     7. 'agronomy': The user is asking general farming advice (fertilizers, soil, crop timing) or anything else.
+    8. 'soil': The user is asking to analyze soil images or interpret physical DIY soil tests.
+    9. 'water': The user is asking for irrigation advice, soil moisture status, or water-related alerts (flood/drought).
+    10. 'finance': The user is asking about government subsidies, how to apply for a Krishi Card, crop insurance, or their credit readiness score.
   expected_output: >
     You must return a raw JSON object with NO markdown formatting, NO backticks, and NO conversational text.
     The JSON must contain two keys: 'intent' (the category string) and 'router_response' (your immediate polite answer or greeting in the user's language).
@@ -66,3 +69,37 @@ alert_advice_task:
     Format your response in the user's language, providing a clear color-coded risk (Green/Yellow/Red) and actionable advice.
   expected_output: >
     A clear summary of pest/disease risks and a daily tip.
+
+soil_analysis_task:
+  description: >
+    The user wants an analysis of their soil condition.
+    If an image path is provided, use the Soil Image Analyzer to determine the likely texture and organic matter content.
+    If the user describes a DIY test (like ribbon length or pH color), use the DIY Soil Test Interpreter to decode it.
+    Based on the findings, formulate a precise, actionable fertilizer and soil amendment plan for their crop.
+    User input: "{user_input}"
+    Image provided: "{image_path}"
+  expected_output: >
+    A clear Bengali explanation of the soil condition (texture/pH) followed by a bulleted list of recommended organic amendments and fertilizers (e.g., compost, lime, NPK).
+  agent: soil_scientist_agent
+
+irrigation_advice_task:
+  description: >
+    Provide precision irrigation advice and water hazard alerts for the user's location: '{gps}'.
+    Use your satellite moisture tools to check the current root-zone soil wetness.
+    Combine this with weather forecast data (rain chance, precipitation) to calculate a water balance.
+    If there are high rainfall forecasts, check for flood risks.
+    Format your response in actionable Bengali.
+  expected_output: >
+    A clear Bengali status report (e.g., "মাটির আর্দ্রতা বর্তমানে সন্তোষজনক") followed by specific irrigation advice (e.g., "আগামী ২৪ ঘণ্টার মধ্যে ১৫ মি.মি. সেচ দিন") and any relevant alerts.
+  agent: water_analyst_agent
+
+finance_navigator_task:
+  description: >
+    Provide expert financial and policy advice for the user's query: '{user_input}'.
+    If they ask about subsidies, search for eligible schemes and provide step-by-step application instructions in Bengali.
+    If they ask about credit readiness, analyze their farm diary status for user: '{user_id}'.
+    If they ask about insurance, provide a quote based on their crop and land size.
+    Always respond in a helpful, professional Bengali tone.
+  expected_output: >
+    A detailed guide in Bengali explaining how to apply for specific subsidies, or a credit report with a 0-100 score, or a personalized insurance quote.
+  agent: finance_advisor_agent

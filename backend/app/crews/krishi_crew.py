@@ -9,6 +9,9 @@ from app.tools.vision_tool import LocalVisionDiseaseTool
 from app.tools.weather_tool import WeatherLookupTool
 from app.tools.market_tool import MarketPriceTool
 from app.tools.alert_tool import PestRiskTool
+from app.tools.soil_tool import SoilVisionTool, DIYSoilTestTool, RecommendFertilizerTool
+from app.tools.irrigation_tool import SatelliteMoistureTool, WaterBalanceTool, FloodDroughtAlertTool
+from app.tools.finance_tool import SubsidyNavigatorTool, CreditScoringTool, InsuranceQuoteTool
 
 # 1. Setup Structured Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -34,6 +37,15 @@ class KrishiCrewOrchestrator:
         self.weather_tool = WeatherLookupTool()
         self.market_tool = MarketPriceTool()
         self.alert_tool = PestRiskTool()
+        self.soil_vision_tool = SoilVisionTool()
+        self.diy_soil_tool = DIYSoilTestTool()
+        self.recommend_fertilizer_tool = RecommendFertilizerTool()
+        self.satellite_moisture_tool = SatelliteMoistureTool()
+        self.water_balance_tool = WaterBalanceTool()
+        self.water_hazard_tool = FloodDroughtAlertTool()
+        self.subsidy_tool = SubsidyNavigatorTool()
+        self.credit_tool = CreditScoringTool()
+        self.insurance_tool = InsuranceQuoteTool()
         
         logger.info("KrishiCrewOrchestrator initialized with memory and caching.")
 
@@ -50,20 +62,39 @@ class KrishiCrewOrchestrator:
         market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=agronomist_llm, tools=[self.market_tool], allow_delegation=False, verbose=True)
         farm_manager_agent = Agent(config=self.agents_config["farm_manager_agent"], llm=interpreter_llm, allow_delegation=False, verbose=True)
         alert_advisor_agent = Agent(config=self.agents_config["alert_advisor_agent"], llm=agronomist_llm, tools=[self.alert_tool], allow_delegation=False, verbose=True)
-        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent
+        soil_scientist_agent = Agent(config=self.agents_config["soil_scientist_agent"], llm=agronomist_llm, tools=[self.soil_vision_tool, self.diy_soil_tool, self.recommend_fertilizer_tool], allow_delegation=False, verbose=True)
+        water_analyst_agent = Agent(config=self.agents_config["water_analyst_agent"], llm=agronomist_llm, tools=[self.satellite_moisture_tool, self.water_balance_tool, self.water_hazard_tool], allow_delegation=False, verbose=True)
+        finance_advisor_agent = Agent(config=self.agents_config["finance_advisor_agent"], llm=agronomist_llm, tools=[self.subsidy_tool, self.credit_tool, self.insurance_tool], allow_delegation=False, verbose=True)
+        return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent
 
     def _create_tasks(self, agents):
-        router, agronomist, pathologist, weather, market, farm_manager, alert_advisor = agents
+        router, agronomist, pathologist, weather, market, farm_manager, alert_advisor, soil_scientist, water_analyst, finance_advisor = agents
         
-        route_task = Task(config=self.tasks_config["route_query_task"], agent=router)
-        disease_task = Task(config=self.tasks_config["disease_diagnosis_task"], agent=pathologist)
-        agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"], agent=agronomist)
-        weather_task = Task(config=self.tasks_config["weather_advice_task"], agent=weather)
-        market_task = Task(config=self.tasks_config["market_advice_task"], agent=market)
-        diary_task = Task(config=self.tasks_config["farm_diary_task"], agent=farm_manager)
-        alert_task = Task(config=self.tasks_config["alert_advice_task"], agent=alert_advisor)
+        # Prepare task configurations with the agent objects
+        self.tasks_config["route_query_task"]["agent"] = router
+        self.tasks_config["disease_diagnosis_task"]["agent"] = pathologist
+        self.tasks_config["agronomy_advice_task"]["agent"] = agronomist
+        self.tasks_config["weather_advice_task"]["agent"] = weather
+        self.tasks_config["market_advice_task"]["agent"] = market
+        self.tasks_config["farm_diary_task"]["agent"] = farm_manager
+        self.tasks_config["alert_advice_task"]["agent"] = alert_advisor
+        self.tasks_config["soil_analysis_task"]["agent"] = soil_scientist
+        self.tasks_config["irrigation_advice_task"]["agent"] = water_analyst
+        self.tasks_config["finance_navigator_task"]["agent"] = finance_advisor
         
-        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task]
+        route_task = Task(config=self.tasks_config["route_query_task"])
+        disease_task = Task(config=self.tasks_config["disease_diagnosis_task"])
+        agronomy_task = Task(config=self.tasks_config["agronomy_advice_task"])
+        weather_task = Task(config=self.tasks_config["weather_advice_task"])
+        market_task = Task(config=self.tasks_config["market_advice_task"])
+        diary_task = Task(config=self.tasks_config["farm_diary_task"])
+        alert_task = Task(config=self.tasks_config["alert_advice_task"])
+        soil_task = Task(config=self.tasks_config["soil_analysis_task"])
+        water_task = Task(config=self.tasks_config["irrigation_advice_task"])
+        finance_task = Task(config=self.tasks_config["finance_navigator_task"])
+        
+        return [route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task]
+
 
     def _generate_cache_key(self, user_input: str, gps: dict, image_path: str) -> str:
         """Create a deterministic cache key based on inputs."""
@@ -97,8 +128,8 @@ class KrishiCrewOrchestrator:
         agents_tuple = self._create_agents()
         tasks_list = self._create_tasks(agents_tuple)
 
-        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent = agents_tuple
-        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task = tasks_list
+        router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent = agents_tuple
+        route_task, disease_task, agronomy_task, weather_task, market_task, diary_task, alert_task, soil_task, water_task, finance_task = tasks_list
 
         import asyncio
         import json
@@ -110,7 +141,8 @@ class KrishiCrewOrchestrator:
             inputs = {
                 "user_input": user_input,
                 "gps": str(gps) if gps else "None",
-                "image_path": str(image_path) if image_path else "None"
+                "image_path": str(image_path) if image_path else "None",
+                "user_id": initial_state.get("user_id", "anonymous")
             }
             route_result = await asyncio.to_thread(router_crew.kickoff, inputs=inputs)
             route_str = str(route_result).replace("```json", "").replace("```", "").strip()
@@ -131,7 +163,12 @@ class KrishiCrewOrchestrator:
             # 2. Execute target crew based on intent
             if intent == "greeting":
                 final_text = response_text
-            elif intent == "disease" or (image_path and image_path.lower() != "none"):
+            elif intent == "soil":
+                logger.info("Routing to Soil Scientist Agent...")
+                soil_crew = Crew(agents=[soil_scientist_agent], tasks=[soil_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(soil_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "disease" or (image_path and image_path.lower() != "none" and intent != "soil"):
                 logger.info("Routing to Pathologist Agent...")
                 disease_crew = Crew(agents=[pathologist_agent], tasks=[disease_task], verbose=True, step_callback=sync_step_callback)
                 result = await asyncio.to_thread(disease_crew.kickoff, inputs=inputs)
@@ -156,6 +193,16 @@ class KrishiCrewOrchestrator:
                 logger.info("Routing to Alert Advisor Agent...")
                 alert_crew = Crew(agents=[alert_advisor_agent], tasks=[alert_task], verbose=True, step_callback=sync_step_callback)
                 result = await asyncio.to_thread(alert_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "water":
+                logger.info("Routing to Water Analyst Agent...")
+                water_crew = Crew(agents=[water_analyst_agent], tasks=[water_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(water_crew.kickoff, inputs=inputs)
+                final_text = str(result)
+            elif intent == "finance":
+                logger.info("Routing to Finance Advisor Agent...")
+                finance_crew = Crew(agents=[finance_advisor_agent], tasks=[finance_task], verbose=True, step_callback=sync_step_callback)
+                result = await asyncio.to_thread(finance_crew.kickoff, inputs=inputs)
                 final_text = str(result)
             else:
                 logger.info("Routing to Agronomist Agent...")

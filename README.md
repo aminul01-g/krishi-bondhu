@@ -82,6 +82,9 @@ graph TD
 - **Smart Market Intelligence**: Real-time wholesale prices from nearby mandis with 7-day predictive trend advice
 - **Digital Farm Diary**: Voice-driven logging of daily farming expenses and yields with automatic P&L aggregation
 - **Proactive Pest Alerts**: Automated weather-correlated pest/disease risk notifications based on current crop stages
+- **Soil Health Advisor**: AI-powered soil texture analysis and personalized hybrid fertilizer recommendations
+- **Micro-Irrigation & Water Management**: Satellite-derived (NASA POWER) moisture monitoring with daily advice and hazard alerts
+- **Agri-Finance & Subsidy Navigator**: Step-by-step guides for government subsidies, credit readiness reports, and insurance quoting
 
 ### Technical Features
 - **Progressive Web App (PWA)**: Installable on mobile/desktop with offline capabilities

@@ -6,6 +6,9 @@ import ConversationHistory from './components/ConversationHistory'
 import MarketIntelligence from './components/MarketIntelligence'
 import FarmDiary from './components/FarmDiary'
 import DailyTips from './components/DailyTips'
+import SoilHealth from './components/SoilHealth'
+import WaterIrrigation from './components/WaterIrrigation'
+import FinanceHub from './components/FinanceHub'
 import { API_BASE } from './api'
 import { useAgentSocket } from './hooks/useAgentSocket'
 import { flushQueue } from './services/offlineQueue'
@@ -72,7 +75,10 @@ export default function App() {
     { id: 'chat', label: '💬 Chat', icon: '💬' },
     { id: 'market', label: '📈 Market', icon: '📈' },
     { id: 'diary', label: '📒 Diary', icon: '📒' },
-    { id: 'tips', label: '💡 Tips', icon: '💡' }
+    { id: 'tips', label: '💡 Tips', icon: '💡' },
+    { id: 'soil', label: '🌱 Soil', icon: '🌱' },
+    { id: 'water', label: '💧 Water', icon: '💧' },
+    { id: 'finance', label: '💰 Finance', icon: '💰' }
   ]
 
   return (
@@ -93,7 +99,7 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        <div className="container">
+        <div className="container p-4">
           {/* Tab Navigation */}
           <div className="tabs-container">
             {tabs.map(tab => (
@@ -102,26 +108,22 @@ export default function App() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
               >
-                <span className="tab-icon">{tab.icon}</span>
-                <span className="tab-label">{tab.label}</span>
+                {tab.icon} {tab.label}
               </button>
             ))}
           </div>
 
-          <div className="main-content">
+          <div className="main-content grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
             {/* Main Content Area */}
             <section className="content-section">
-              <div className="card">
+              <div className="modern-card">
                 {activeTab === 'voice' && (
                   <>
-                    <h2>🎤 Voice Assistant</h2>
-                    <p className="section-description">
-                      Record your voice question in Bengali or English. Ask about crop diseases,
-                      farming advice, or weather conditions.
-                    </p>
+                    <h2 className="text-2xl font-bold mb-4">Voice Assistant</h2>
                     <Recorder onConversationComplete={handleNewConversation} />
                   </>
                 )}
+                {/* ... other tab content ... */}
 
                 {/* Image tab removed to avoid duplicate upload option while using chat */}
 
@@ -150,6 +152,9 @@ export default function App() {
                 {activeTab === 'market' && <MarketIntelligence />}
                 {activeTab === 'diary' && <FarmDiary />}
                 {activeTab === 'tips' && <DailyTips />}
+                {activeTab === 'soil' && <SoilHealth userId="user_123" />}
+                {activeTab === 'water' && <WaterIrrigation userId="user_123" />}
+                {activeTab === 'finance' && <FinanceHub userId="user_123" />}
               </div>
             </section>
 
