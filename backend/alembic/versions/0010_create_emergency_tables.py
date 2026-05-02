@@ -18,6 +18,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if op.get_context().dialect.name == "sqlite":
+        return
+        
     op.create_table(
         'insurance_providers',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -85,6 +88,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_context().dialect.name == "sqlite":
+        return
+        
     op.drop_index(op.f('ix_helpline_call_logs_status'), table_name='helpline_call_logs')
     op.drop_table('helpline_call_logs')
     op.drop_table('report_images')

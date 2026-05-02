@@ -19,6 +19,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if op.get_context().dialect.name == "sqlite":
+        return
+        
     op.create_table(
         'community_questions',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
@@ -100,6 +103,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_context().dialect.name == "sqlite":
+        return
+        
     op.drop_table('agricultural_experts')
     op.drop_table('escalation_queue')
     op.drop_index(op.f('ix_answer_upvotes_unique'), table_name='answer_upvotes')
