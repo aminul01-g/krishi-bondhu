@@ -24,17 +24,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
 
-  const wsUrl = (() => {
-    if (API_BASE.startsWith('http')) {
-      return API_BASE.replace('http', 'ws') + '/ws/agent_status'
-    }
-    // Handle relative paths (e.g., on Hugging Face Spaces)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    // If API_BASE is '/api', this becomes 'wss://.../api/ws/agent_status'
-    return `${protocol}//${host}${API_BASE}/ws/agent_status`
-  })()
-
+  const wsUrl = API_BASE.replace('http', 'ws') + '/ws/agent_status'
   const { status: agentStatus, isConnected } = useAgentSocket(wsUrl)
 
   const fetchConversations = async () => {
@@ -78,18 +68,24 @@ export default function App() {
     setTimeout(fetchConversations, 2000)
   }
 
-  const tabs = [
-    { id: 'chat', label: 'AI Chat', icon: '💬' },
-    { id: 'market', label: 'Market Intelligence', icon: '📈' },
-    { id: 'diary', label: 'Farm Diary', icon: '📒' },
-    { id: 'tips', label: 'Daily Tips', icon: '💡' },
-    { id: 'soil', label: 'Soil Health', icon: '🌱' },
-    { id: 'water', label: 'Irrigation', icon: '💧' },
-    { id: 'finance', label: 'Finance Hub', icon: '💰' },
-    { id: 'community', label: 'Community Q&A', icon: '👥' },
-    { id: 'marketplace', label: 'Marketplace', icon: '🛒' },
-    { id: 'emergency', label: 'Emergency', icon: '🚨' }
-  ]
+  const tabGroups = {
+    'Core AI Assistant': [
+      { id: 'chat', label: 'AI Chat', icon: '💬' },
+      { id: 'market', label: 'Market Intelligence', icon: '📈' },
+      { id: 'tips', label: 'Daily Tips', icon: '💡' }
+    ],
+    'Farm Management': [
+      { id: 'diary', label: 'Farm Diary', icon: '📒' },
+      { id: 'soil', label: 'Soil Health', icon: '🌱' },
+      { id: 'water', label: 'Irrigation', icon: '💧' },
+      { id: 'finance', label: 'Finance Hub', icon: '💰' }
+    ],
+    'Community & Support': [
+      { id: 'community', label: 'Community Q&A', icon: '👥' },
+      { id: 'marketplace', label: 'Marketplace', icon: '🛒' },
+      { id: 'emergency', label: 'Emergency', icon: '🚨' }
+    ]
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('krishi_auth_token')
@@ -120,31 +116,6 @@ export default function App() {
             <button className="logout-btn" onClick={handleLogout}>Log out</button>
           </div>
         </div>
-
-        <div className="hero-panel">
-          <div className="hero-copy">
-            <h2>Ask, analyze, and act with confidence from one farming dashboard.</h2>
-            <p>Voice, camera, chat, market data, farm finance, soil health and irrigation advice—all designed for the modern farmer.</p>
-            <div className="hero-actions">
-              <button className={`hero-action ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>Start Chat</button>
-              <button className={`hero-action ${activeTab === 'market' ? 'active' : ''}`} onClick={() => setActiveTab('market')}>Check Markets</button>
-            </div>
-          </div>
-          <div className="hero-stats">
-            <div className="stat-card">
-              <strong>12</strong>
-              <span>Smart tools</span>
-            </div>
-            <div className="stat-card">
-              <strong>Offline</strong>
-              <span>Queue support</span>
-            </div>
-            <div className="stat-card">
-              <strong>24/7</strong>
-              <span>AI guidance</span>
-            </div>
-          </div>
-        </div>
       </header>
 
       <main className="app-main">
@@ -154,16 +125,23 @@ export default function App() {
               <div className="panel-card glassmorphism">
                 <div className="panel-title">Toolset</div>
                 <p className="panel-copy">One tap access to every KrishiBondhu capability.</p>
-                <div className="tab-list">
-                  {tabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                    >
-                      <span>{tab.icon}</span>
-                      {tab.label}
-                    </button>
+                <div className="tab-groups">
+                  {Object.entries(tabGroups).map(([groupName, groupTabs]) => (
+                    <div key={groupName} className="tab-group" style={{ marginBottom: '1.5rem' }}>
+                      <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{groupName}</h4>
+                      <div className="tab-list">
+                        {groupTabs.map(tab => (
+                          <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                          >
+                            <span>{tab.icon}</span>
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>

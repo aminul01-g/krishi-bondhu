@@ -30,7 +30,8 @@ export default function AuthPage({ onLogin }) {
     }
   };
 
-  const handleSocialLogin = async (provider) => {
+  const handleSocialLogin = async (provider, e) => {
+    if (e) e.preventDefault();
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -90,13 +91,13 @@ export default function AuthPage({ onLogin }) {
         </div>
 
         <div className="social-login-grid">
-          <button onClick={() => handleSocialLogin('google')} className="social-btn" disabled={loading} title="Google">
+          <button type="button" onClick={(e) => handleSocialLogin('google', e)} className="social-btn" disabled={loading} title="Google">
             <span>G</span>
           </button>
-          <button onClick={() => handleSocialLogin('apple')} className="social-btn" disabled={loading} title="Apple">
+          <button type="button" onClick={(e) => handleSocialLogin('apple', e)} className="social-btn" disabled={loading} title="Apple">
             <span></span>
           </button>
-          <button onClick={() => handleSocialLogin('phone')} className="social-btn" disabled={loading} title="Phone">
+          <button type="button" onClick={(e) => handleSocialLogin('phone', e)} className="social-btn" disabled={loading} title="Phone">
             <span>📱</span>
           </button>
         </div>

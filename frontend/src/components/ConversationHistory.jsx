@@ -4,7 +4,7 @@ import { API_BASE } from '../api'
 export default function ConversationHistory({ conversations, loading, onDelete }) {
   const [deletingId, setDeletingId] = useState(null)
   
-  if (loading) {
+  if (loading && conversations.length === 0) {
     return (
       <div className="loading-state" style={{ padding: '2rem', textAlign: 'center' }}>
         <div className="spinner" style={{ border: '4px solid rgba(0,0,0,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', width: '40px', height: '40px', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>

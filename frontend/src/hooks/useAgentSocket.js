@@ -16,12 +16,7 @@ export function useAgentSocket(url) {
     let reconnectTimer = null;
 
     const connect = () => {
-      try {
-        ws = new WebSocket(url);
-      } catch (err) {
-        console.error('WebSocket connection failed:', err);
-        return;
-      }
+      ws = new WebSocket(url);
 
       ws.onopen = () => {
         console.log('Connected to Agent WebSocket');
