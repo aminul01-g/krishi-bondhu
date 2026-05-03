@@ -14,7 +14,7 @@ class SubsidyNavigatorTool(BaseTool):
     name: str = "Subsidy & Scheme Navigator"
     description: str = "Finds eligible government subsidies and provides step-by-step 'How to Apply' guides in Bengali."
     
-    def _run(self, crop: str = "All", land_size: float = 0.0) -> str:
+    def _run(self, crop: str = "All", land_size: str = "0.0") -> str:
         data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'finance_data.json')
         if not os.path.exists(data_path):
             return "Subsidy data unavailable."
@@ -22,17 +22,22 @@ class SubsidyNavigatorTool(BaseTool):
         with open(data_path, 'r', encoding='utf-8') as f:
             schemes = json.load(f)
             
+        try:
+            # Handle cases where land_size might have units like 'acres'
+            import re
+            numeric_match = re.search(r"[-+]?\d*\.\d+|\d+", str(land_size))
+            land_size_f = float(numeric_match.group()) if numeric_match else 0.0
+        except Exception:
+            land_size_f = 0.0
+            
         eligible = []
         for s in schemes:
             criteria = s.get("eligibility_criteria", {})
-            # Ensure min_land is float and handle comparison safely
             min_land = float(criteria.get("min_land", 0.0))
-            land_size_f = float(land_size)
             target_crops = criteria.get("crops", ["All"])
             
-            # Check eligibility
             if land_size_f >= min_land:
-                if "All" in target_crops or crop.lower() in [c.lower() for c in target_crops]:
+                if "All" in target_crops or str(crop).lower() in [c.lower() for c in target_crops]:
                     eligible.append(s)
                     
         if not eligible:
@@ -50,13 +55,39 @@ class SubsidyNavigatorTool(BaseTool):
 class CreditScoringTool(BaseTool):
     name: str = "Credit Readiness Scorer"
     description: str = "Calculates a 0-100 credit readiness score based on farm diary logs (consistency, profitability, completeness)."
-    db_session: AsyncSession = None  # Will be injected
     
     def _run(self, user_id: str) -> str:
         """Synchronous wrapper for credit scoring."""
-        # Since this is sync, provide wrapper
-        # The real implementation is in async calculate_credit_score()
-        return f"Credit scoring initiated for user {user_id}. Use async endpoint for real results."
+        from app.db import AsyncSessionLocal
+        import asyncio
+        
+        async def run_scoring():
+            async with AsyncSessionLocal() as session:
+                return await self.calculate_credit_score(session, user_id)
+        
+        def run_sync():
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                return loop.run_until_complete(run_scoring())
+            finally:
+                loop.close()
+        
+        try:
+            data = run_sync()
+            
+            if not data or "error" in data:
+                return f"Error: {data.get('error', 'Unknown error during scoring')}"
+                
+            res = f"### CREDIT READINESS SCORE: {data['score']}/100\n\n"
+            res += f"Breakdown:\n"
+            res += f"- Consistency: {data['breakdown']['consistency']}/40\n"
+            res += f"- Profitability: {data['breakdown']['profitability']}/30\n"
+            res += f"- Completeness: {data['breakdown']['completeness']}/30\n\n"
+            res += f"Recommendation: {data['recommendation']}\n"
+            return res
+        except Exception as e:
+            return f"Unable to calculate credit score at this time: {str(e)}"
     
     async def calculate_credit_score(self, session: AsyncSession, user_id: str) -> dict:
         """

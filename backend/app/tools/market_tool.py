@@ -11,6 +11,7 @@ class MarketPriceTool(BaseTool):
     name: str = "Market Price Fetcher and Predictor"
     description: str = "Fetches current wholesale prices for a crop in nearby mandis and provides a 7-day predicted trend."
     db_session: AsyncSession = None  # Will be injected by the agent
+    last_prices: dict = None # Internal state to store fetched data for DB persistence
     
     def _run(self, crop: str, location_lat: float = None, location_lon: float = None, **kwargs) -> str:
         """Synchronous wrapper for market price fetching."""
@@ -18,8 +19,8 @@ class MarketPriceTool(BaseTool):
         return self._fetch_market_data(crop, location_lat, location_lon)
     
     def _fetch_market_data(self, crop: str, location_lat: float = None, location_lon: float = None) -> str:
-        # Normalize crop name
-        crop = str(crop).strip().lower()
+        # Robust normalization
+        crop = str(crop).strip().lower() if crop else ""
         if not crop or crop == "none":
             return "Please specify a crop to get market prices."
             

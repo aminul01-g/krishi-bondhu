@@ -14,7 +14,7 @@ class CropDamageAssessmentTool(BaseTool):
     name: str = "Assess Crop Damage"
     description: str = "Analyze an image of a crop to estimate the percentage of damage using rule-based vegetation indices. Requires image_path and crop_type."
 
-    def _run(self, image_path: str, crop_type: str) -> str:
+    def _run(self, image_path: str = "none", crop_type: str = "general", **kwargs) -> str:
         if not CV2_AVAILABLE or not os.path.exists(image_path):
             return f"Mock Damage Assessment: Estimated 65% damage for {crop_type} due to flooding."
         

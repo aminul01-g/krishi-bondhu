@@ -26,9 +26,7 @@ export function useAgentSocket(url) {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.message) {
-            setStatus(data.message);
-          }
+          setStatus(data); // Set the full object so we can check 'type'
         } catch (err) {
           console.error('Failed to parse WebSocket message', err);
         }

@@ -11,9 +11,19 @@ class SatelliteMoistureTool(BaseTool):
     name: str = "Satellite Soil Moisture Fetcher"
     description: str = "Fetches root-zone soil wetness index (0-1) from satellite data for a given GPS location."
     
-    def _run(self, lat: float, lon: float, **kwargs) -> str:
+    def _run(self, lat: float = None, lon: float = None, gps: str = None, **kwargs) -> str:
+        # If gps string is provided instead of lat/lon
+        if gps and (not lat or not lon):
+            try:
+                import re
+                nums = re.findall(r"[-+]?\d*\.\d+|\d+", str(gps))
+                if len(nums) >= 2:
+                    lat, lon = float(nums[0]), float(nums[1])
+            except Exception:
+                pass
+
         if not lat or not lon:
-            return "GPS coordinates missing. Cannot fetch satellite moisture."
+            return "GPS coordinates missing or invalid. Cannot fetch satellite moisture."
             
         # NASA POWER API for Root Zone Soil Wetness (GWETROOT)
         # We fetch for the last 3 days to get a stable average
@@ -53,10 +63,10 @@ class WaterBalanceTool(BaseTool):
     name: str = "Irrigation Advice Engine"
     description: str = "Calculates irrigation advice based on soil moisture and weather forecast."
     
-    def _run(self, soil_moisture_str: str, rain_chance: float = 0.0, expected_precip_mm: float = 0.0) -> str:
+    def _run(self, soil_moisture: str, rain_chance: float = 0.0, expected_precip_mm: float = 0.0) -> str:
         # Extract moisture value from string (e.g., "0.35")
         import re
-        moisture_match = re.search(r"(\d+\.\d+)", soil_moisture_str)
+        moisture_match = re.search(r"(\d+\.\d+)", str(soil_moisture))
         moisture = float(moisture_match.group(1)) if moisture_match else 0.5
         
         advice = []

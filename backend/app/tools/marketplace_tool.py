@@ -14,7 +14,20 @@ class DealerSearchTool(BaseTool):
     name: str = "Search Local Dealers"
     description: str = "Find nearby verified dealers for specific inputs like 'seeds' or 'fertilizer'. Requires lat and lon."
 
-    def _run(self, input_type: str, lat: float, lon: float) -> str:
+    def _run(self, input_type: str = "general", lat: float = None, lon: float = None, gps: str = None, **kwargs) -> str:
+        # Robust GPS parsing
+        if gps and (not lat or not lon):
+            try:
+                import re
+                nums = re.findall(r"[-+]?\d*\.\d+|\d+", str(gps))
+                if len(nums) >= 2:
+                    lat, lon = float(nums[0]), float(nums[1])
+            except Exception:
+                pass
+                
+        # Default to Dhaka if still missing
+        lat = lat or 23.81
+        lon = lon or 90.41
         try:
             with httpx.Client() as client:
                 response = client.get("http://localhost:8000/api/marketplace/dealers", params={"lat": float(lat), "lon": float(lon), "limit": 3})

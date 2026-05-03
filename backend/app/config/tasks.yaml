@@ -48,7 +48,7 @@ market_advice_task:
     Extract the crop mentioned and use your market tools to find current prices and trends.
     Format your response in the user's language, emphasizing whether they should hold or sell.
   expected_output: >
-    A clear summary of market prices, predictions, and selling advice.
+    A concise summary of market prices, predictions, and selling advice in the user's language. Focus on the facts.
 
 farm_diary_task:
   description: >

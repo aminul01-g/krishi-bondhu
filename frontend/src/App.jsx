@@ -66,11 +66,17 @@ export default function App() {
     }
   }, [])
 
+  // NEW: Listen for WebSocket events to refresh history
+  useEffect(() => {
+    if (agentStatus && agentStatus.type === 'history_updated') {
+      console.log('History update signal received via WebSocket');
+      fetchConversations();
+    }
+  }, [agentStatus])
+
   const handleNewConversation = () => {
-    // Refresh history automatically after a new message
-    fetchConversations()
-    setTimeout(fetchConversations, 1500)
-    setTimeout(fetchConversations, 4000)
+    // No longer need manual timeouts! 
+    // The WebSocket will broadcast 'history_updated' when the DB is ready.
   }
 
   const tabGroups = {
@@ -115,7 +121,7 @@ export default function App() {
 
           <div className="header-status">
             <span className={`status-pill ${isConnected ? 'online' : 'offline'}`}>
-              {isConnected ? `🟢 ${agentStatus || 'Agent ready'}` : '🔴 Reconnecting...'}
+              {isConnected ? `🟢 ${agentStatus?.message || agentStatus?.type || 'Agent ready'}` : '🔴 Reconnecting...'}
             </span>
             {isOffline && <span className="offline-banner">Offline mode enabled — actions will sync when you're back online.</span>}
             <button className="logout-btn" onClick={handleLogout}>Log out</button>

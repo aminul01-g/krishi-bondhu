@@ -16,17 +16,19 @@ router = APIRouter()
 # orchestrator = KrishiCrewOrchestrator()  # Lazy import to avoid circular deps
 # credit_scorer = CreditScoringTool()
 
-@router.post("/schemes")
-async def get_subsidy_schemes(
-    user_id: str,
-    crop: str = "All",
+
+class SubsidyRequest(BaseModel):
+    user_id: str
+    crop: str = "All"
     land_size: float = 0.0
-):
+
+@router.post("/schemes")
+async def get_subsidy_schemes(request: SubsidyRequest):
     try:
-        input_text = f"Find eligible subsidy schemes for crop {crop} with land size {land_size}."
+        input_text = f"Find eligible subsidy schemes for crop {request.crop} with land size {request.land_size}."
         initial_state = {
             "transcript": "Finance request: " + input_text,
-            "user_id": user_id
+            "user_id": request.user_id
         }
         result = await orchestrator.ainvoke(initial_state)
         return {"advice": result.get("reply_text", "No schemes found.")}
@@ -60,27 +62,30 @@ async def get_credit_report(
         logger.error(f"Error generating credit report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate credit report.")
 
+class InsuranceQuoteRequest(BaseModel):
+    user_id: str
+    crop: str
+    land_size: float
+
 @router.post("/insurance-quote")
 async def get_insurance_quote(
-    user_id: str,
-    crop: str,
-    land_size: float,
+    request: InsuranceQuoteRequest,
     session: AsyncSession = Depends(get_db_session)
 ):
     try:
-        input_text = f"Get insurance quote for {crop} with {land_size} decimals."
+        input_text = f"Get insurance quote for {request.crop} with {request.land_size} decimals."
         initial_state = {
             "transcript": "Finance request: " + input_text,
-            "user_id": user_id
+            "user_id": request.user_id
         }
         result = await orchestrator.ainvoke(initial_state)
         advice = result.get("reply_text", "No quote available.")
 
         # Log quote
         quote = InsuranceQuote(
-            user_id=user_id,
-            crop=crop,
-            land_size=land_size
+            user_id=request.user_id,
+            crop=request.crop,
+            land_size=request.land_size
         )
         session.add(quote)
         await session.commit()

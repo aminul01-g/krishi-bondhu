@@ -70,7 +70,7 @@ class KrishiCrewOrchestrator:
         agronomist_agent = Agent(config=self.agents_config["agronomist_agent"], llm=agronomist_llm, allow_delegation=False, verbose=True)
         pathologist_agent = Agent(config=self.agents_config["pathologist_agent"], llm=interpreter_llm, tools=[self.vision_tool], allow_delegation=False, verbose=True)
         weather_agent = Agent(config=self.agents_config["weather_analyst_agent"], llm=interpreter_llm, tools=[self.weather_tool], allow_delegation=False, verbose=True)
-        market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=agronomist_llm, tools=[self.market_tool], allow_delegation=False, verbose=True)
+        market_agent = Agent(config=self.agents_config["market_analyst_agent"], llm=interpreter_llm, tools=[self.market_tool], allow_delegation=False, max_iter=3, verbose=True)
         farm_manager_agent = Agent(config=self.agents_config["farm_manager_agent"], llm=interpreter_llm, allow_delegation=False, verbose=True)
         alert_advisor_agent = Agent(config=self.agents_config["alert_advisor_agent"], llm=agronomist_llm, tools=[self.alert_tool], allow_delegation=False, verbose=True)
         soil_scientist_agent = Agent(config=self.agents_config["soil_scientist_agent"], llm=agronomist_llm, tools=[self.soil_vision_tool, self.diy_soil_tool, self.recommend_fertilizer_tool], allow_delegation=False, verbose=True)
@@ -250,6 +250,16 @@ class KrishiCrewOrchestrator:
             logger.info("Crew execution successful. Response cached.")
             
             initial_state["reply_text"] = final_text
+            
+            # NEW: Persist any staged tool data (like market prices) to DB
+            if intent == "market" and hasattr(self, 'market_tool'):
+                try:
+                    from app.db import AsyncSessionLocal
+                    async with AsyncSessionLocal() as db_session:
+                        await self.market_tool.save_prices_to_db(db_session)
+                except Exception as db_e:
+                    logger.warning(f"Failed to persist market tool data: {db_e}")
+                    
             return initial_state
             
         except Exception as e:

@@ -68,6 +68,9 @@ async def save_conversation_to_db(
         db.add(conv)
         await db.commit()
         print(f"[DEBUG] Saved conversation for user_id {user_db_id}")
+        
+        # NEW: Broadcast event to refresh history in frontend
+        await ws_manager.broadcast({"type": "history_updated", "user_id": user_db_id})
     except Exception as e:
         print(f"[ERROR] Failed to save conversation: {e}")
 

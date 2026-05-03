@@ -36,4 +36,8 @@ export const postSoilAnalyze = (data) => post('/soil/analyze', data)
 export const postWaterAdvice = (data) => post('/water/advice', data)
 export const postFinanceSchemes = (data) => post('/finance/schemes', data)
 export const getFinanceCreditReport = (userId) => get(`/finance/credit-report?user_id=${userId}`)
+
 export const postInsuranceQuote = (data) => post('/finance/insurance-quote', data)
+export const getEmergencyProviders = () => get('/emergency/providers')
+export const postEmergencyReport = (data) => post('/emergency/reports', data)
+export const postHelplineCall = (data) => post('/emergency/helpline', data)

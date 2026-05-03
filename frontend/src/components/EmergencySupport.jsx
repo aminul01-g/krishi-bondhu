@@ -1,11 +1,45 @@
+
 import React, { useState } from 'react';
+import { postEmergencyReport, postHelplineCall } from '../services/api';
 
-export default function EmergencySupport() {
+export default function EmergencySupport({ userId }) {
   const [reportId, setReportId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleReport = () => {
-    // Mock report generation
-    setReportId("REP-999-XYZ");
+  const handleReport = async () => {
+    setLoading(true);
+    try {
+      // Real report generation
+      const payload = {
+        farmer_id: userId || "anonymous",
+        crop_type: "Rice",
+        lat: 23.8,
+        lon: 90.4,
+        damage_cause: "Flood",
+        damage_estimate_percent: 50.0,
+        yield_loss_estimate_percent: 40.0
+      };
+      const res = await postEmergencyReport(payload);
+      setReportId(res.id);
+    } catch (err) {
+      console.error("Report failed:", err);
+      alert("Failed to file report. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHelpline = async () => {
+    try {
+        await postHelplineCall({
+            farmer_id: userId || "anonymous",
+            status: "initiated"
+        });
+        alert("Calling National Helpline (3331)...");
+    } catch (err) {
+        console.error("Helpline log failed:", err);
+        alert("Helpline is currently busy. Please dial 3331 directly.");
+    }
   };
 
   return (
@@ -21,11 +55,12 @@ export default function EmergencySupport() {
       <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
         <button 
           onClick={handleReport}
-          style={{ padding: '15px 30px', borderRadius: '8px', background: '#d32f2f', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer' }}>
-          File Damage Report
+          disabled={loading}
+          style={{ padding: '15px 30px', borderRadius: '8px', background: '#d32f2f', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', opacity: loading ? 0.7 : 1 }}>
+          {loading ? 'Filing Report...' : 'File Damage Report'}
         </button>
         <button 
-          onClick={() => alert("Calling 3331...")}
+          onClick={handleHelpline}
           style={{ padding: '15px 30px', borderRadius: '8px', background: 'transparent', color: '#ff9800', border: '2px solid #ff9800', fontWeight: 'bold', cursor: 'pointer' }}>
           Call Helpline (3331)
         </button>
