@@ -97,3 +97,36 @@ class LabelScannerTool(BaseTool):
             return f"Raw OCR Text Extracted: {text[:200]}..."
         except Exception as e:
             return f"Mock OCR fallback due to error: {str(e)}"
+class ArbitrageAlertTool(BaseTool):
+    name: str = "Price Arbitrage Scanner"
+    description: str = "Compare crop prices across neighboring districts to identify transport-profitable opportunities."
+
+    def _run(self, crop: str = "potato", current_district: str = "pabna") -> str:
+        # Mock Price Database for regional spreads
+        spreads = {
+            "potato": [
+                {"district": "Bogura", "price": 18, "dist": 40},
+                {"district": "Rajshahi", "price": 24, "dist": 60},
+                {"district": "Dhaka", "price": 32, "dist": 150}
+            ],
+            "rice": [
+                {"district": "Dinajpur", "price": 45, "dist": 120},
+                {"district": "Naogaon", "price": 42, "dist": 80}
+            ]
+        }
+        
+        current_price = 20 # Mock base price in current_district
+        crop_lower = crop.lower()
+        if crop_lower not in spreads:
+            return f"No arbitrage data available for {crop}."
+        
+        opportunities = []
+        for opp in spreads[crop_lower]:
+            profit = opp['price'] - current_price
+            if profit > 5: # Threshold for arbitrage
+                opportunities.append(f"- {opp['district']}: {opp['price']} BDT (Spread: +{profit} BDT). Distance: {opp['dist']}km.")
+        
+        if not opportunities:
+            return f"Local prices for {crop} are currently competitive. Transport not advised."
+        
+        return f"💡 ARBITRAGE ALERT for {crop}:\nPrices are significantly higher in neighboring markets:\n" + "\n".join(opportunities) + "\n\nConsider local transport if cost < 3 BDT/kg."

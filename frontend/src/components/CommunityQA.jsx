@@ -31,14 +31,23 @@ export default function CommunityQA() {
             {results.map(r => (
               <div key={r.id} className="qa-card glassmorphism">
                 <div className="qa-meta">
-                  <span className="qa-author">{r.author}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span className="qa-author">{r.author}</span>
+                    {r.is_expert && <span className="expert-badge" title="Verified Extension Officer">✅ EXPERT</span>}
+                  </div>
                   <span className="qa-date">{r.date}</span>
                 </div>
                 <h4>{r.text}</h4>
-                <p className="qa-answer"><strong>Expert Advice:</strong> {r.answer}</p>
+                <div className="qa-body">
+                  <p className="qa-answer">
+                    <strong>Advice:</strong> {r.answer}
+                  </p>
+                  <button className="translate-mini-btn">🌐 Translate to {r.language === 'bn' ? 'English' : 'Bengali'}</button>
+                </div>
                 <div className="qa-actions">
                   <button className="text-btn">👍 12 Helpful</button>
                   <button className="text-btn">💬 4 Comments</button>
+                  <button className="text-btn voice-btn">🎙️ Voice Reply</button>
                 </div>
               </div>
             ))}

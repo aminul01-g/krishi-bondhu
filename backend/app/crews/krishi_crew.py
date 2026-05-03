@@ -14,6 +14,7 @@ from app.tools.irrigation_tool import SatelliteMoistureTool, WaterBalanceTool, F
 from app.tools.finance_tool import SubsidyNavigatorTool, CreditScoringTool, InsuranceQuoteTool
 from app.tools.community_tool import CommunitySearchTool, EscalateToExpertTool
 from app.tools.marketplace_tool import DealerSearchTool, ProductVerificationTool, LabelScannerTool
+from app.tools.receipt_tool import ReceiptScannerTool
 from app.tools.emergency_tool import CropDamageAssessmentTool, DamageReportGeneratorTool, SMSShareTool
 from app.services.memory import MemoryService
 
@@ -58,6 +59,7 @@ class KrishiCrewOrchestrator:
         self.damage_assessment_tool = CropDamageAssessmentTool()
         self.damage_report_tool = DamageReportGeneratorTool()
         self.sms_share_tool = SMSShareTool()
+        self.receipt_scanner_tool = ReceiptScannerTool()
         
         logger.info("KrishiCrewOrchestrator initialized with memory and caching.")
 
@@ -78,7 +80,7 @@ class KrishiCrewOrchestrator:
         water_analyst_agent = Agent(config=self.agents_config["water_analyst_agent"], llm=agronomist_llm, tools=[self.satellite_moisture_tool, self.water_balance_tool, self.water_hazard_tool], allow_delegation=False, verbose=True)
         finance_advisor_agent = Agent(config=self.agents_config["finance_advisor_agent"], llm=agronomist_llm, tools=[self.subsidy_tool, self.credit_tool, self.insurance_tool], allow_delegation=False, verbose=True)
         community_connector_agent = Agent(config=self.agents_config["community_connector_agent"], llm=agronomist_llm, tools=[self.community_search_tool, self.escalate_tool], allow_delegation=False, verbose=True)
-        procurement_advisor_agent = Agent(config=self.agents_config["procurement_advisor_agent"], llm=agronomist_llm, tools=[self.dealer_tool, self.product_verify_tool, self.label_scanner_tool], allow_delegation=False, verbose=True)
+        procurement_advisor_agent = Agent(config=self.agents_config["procurement_advisor_agent"], llm=agronomist_llm, tools=[self.dealer_tool, self.product_verify_tool, self.label_scanner_tool, self.receipt_scanner_tool], allow_delegation=False, verbose=True)
         emergency_response_agent = Agent(config=self.agents_config["emergency_response_agent"], llm=agronomist_llm, tools=[self.damage_assessment_tool, self.damage_report_tool, self.sms_share_tool], allow_delegation=False, verbose=True)
         return router_agent, agronomist_agent, pathologist_agent, weather_agent, market_agent, farm_manager_agent, alert_advisor_agent, soil_scientist_agent, water_analyst_agent, finance_advisor_agent, community_connector_agent, procurement_advisor_agent, emergency_response_agent
 

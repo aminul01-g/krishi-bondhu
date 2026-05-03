@@ -61,6 +61,21 @@ export default function Marketplace() {
                 <button className="text-btn" style={{ color: '#10b981', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>Call</button>
             </div>
           </div>
+
+          <div className="market-intel-card glassmorphism" style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(255,255,255,0.5)' }}>
+            <h4 style={{ margin: 0, fontSize: '1rem' }}>📈 Regional Market Intel</h4>
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Potato (Dhaka)</div>
+                <div style={{ fontWeight: 700, color: '#16a34a' }}>32 BDT/kg (+12%)</div>
+              </div>
+              <button className="vibrant-btn small" style={{ background: '#3b82f6' }}>Request Quote</button>
+            </div>
+            <div style={{ marginTop: '1rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+              <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}><strong>Profit Opportunity:</strong> Higher prices in Bogura today. Transport recommended.</p>
+              <button className="vibrant-btn small secondary" style={{ width: '100%', marginTop: '1rem' }}>📣 Broadcast My Harvest</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

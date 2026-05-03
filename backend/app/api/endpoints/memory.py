@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
 from app.db import get_db
 from app.services.memory import MemoryService
 from pydantic import BaseModel
@@ -41,9 +42,31 @@ async def get_farm_memory(user_id: str, db: AsyncSession = Depends(get_db)):
             for f in facts
         ]
         
+        # New: Generate Predictive Insights
+        from app.services.agronomy_service import AgronomyService
+        
+        # Find crop and planting date from facts
+        crop = next((f["value"] for f in structured_facts if f["category"] == "Crop"), "Unknown")
+        p_date_str = next((f["value"] for f in structured_facts if f["key"].lower() == "planting_date"), None)
+        p_date = None
+        if p_date_str:
+            try:
+                p_date = datetime.fromisoformat(p_date_str)
+            except:
+                pass
+        
+        # Mock current conditions for the service
+        current_cond = {"temp": 31, "humidity": 78, "moisture": 22}
+        
+        insights = {
+            "predicted_stage": AgronomyService.predict_growth_stage(crop, p_date, []),
+            "risks": AgronomyService.evaluate_risk(current_cond, facts)
+        }
+        
         return {
             "history": history,
-            "facts": structured_facts
+            "facts": structured_facts,
+            "insights": insights
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

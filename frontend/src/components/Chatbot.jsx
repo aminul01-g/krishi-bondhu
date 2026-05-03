@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { API_BASE } from '../api'
 import { saveToQueue } from '../services/offlineQueue'
+import { EdgeVision } from '../services/EdgeVision'
 
 export default function Chatbot({ onMessageComplete }) {
   const [messages, setMessages] = useState([
@@ -253,13 +254,24 @@ export default function Chatbot({ onMessageComplete }) {
     }
   }
 
+  const [dialectMode, setDialectMode] = useState('standard'); // 'standard' or 'neighbor'
+
+  const toggleDialect = () => {
+    setDialectMode(prev => prev === 'standard' ? 'neighbor' : 'standard');
+  };
+
   const handleSend = async () => {
     if (!input.trim() && !selectedImage) {
       return
     }
 
     const userMessage = input.trim() || (selectedImage ? 'Please analyze this image' : '')
-    setMessages(prev => [...prev, { role: 'user', content: userMessage, image: imagePreview }])
+    setMessages(prev => [...prev, { 
+      role: 'user', 
+      content: userMessage, 
+      image: imagePreview,
+      dialect: dialectMode // Include dialect preference
+    }])
     setInput('')
     setProcessing(true)
 
@@ -273,6 +285,23 @@ export default function Chatbot({ onMessageComplete }) {
     if (gps.lat && gps.lon) {
       fd.append('lat', gps.lat)
       fd.append('lon', gps.lon)
+    }
+
+    // NEW: On-Device Edge Diagnosis
+    let localDiagnosis = null;
+    if (selectedImage) {
+      try {
+        localDiagnosis = await EdgeVision.diagnose(selectedImage);
+        if (localDiagnosis && !localDiagnosis.error) {
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `🔍 **Instant Edge Diagnosis:** ${localDiagnosis.diagnosis}\n\n**Recommendation:** ${localDiagnosis.recommendation}\n\n*(Note: This was analyzed directly on your device. I'm also sending this to our expert server for a secondary check.)*`,
+            metadata: { local: true }
+          }]);
+        }
+      } catch (err) {
+        console.warn('Edge diagnosis failed, falling back to server.', err);
+      }
     }
 
     if (!navigator.onLine) {
@@ -485,6 +514,25 @@ export default function Chatbot({ onMessageComplete }) {
 
   return (
     <div className="chatbot" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '500px' }}>
+      <div className="chatbot-header" style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3 style={{ margin: 0, fontSize: '1rem' }}>🤖 Krishi Assistant</h3>
+        <button 
+          onClick={toggleDialect} 
+          className={`dialect-toggle ${dialectMode !== 'standard' ? 'active' : ''}`}
+          style={{ 
+            background: dialectMode === 'neighbor' ? '#10b981' : '#f1f5f9',
+            color: dialectMode === 'neighbor' ? 'white' : '#64748b',
+            border: 'none',
+            padding: '0.4rem 0.8rem',
+            borderRadius: '8px',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            cursor: 'pointer'
+          }}
+        >
+          {dialectMode === 'neighbor' ? '🏠 Neighbor Mode' : '🏛️ Standard Mode'}
+        </button>
+      </div>
       {/* Hidden trigger for Hands-free button in App.jsx */}
       <button id="voice-trigger" onClick={startRecording} style={{ display: 'none' }}></button>
       

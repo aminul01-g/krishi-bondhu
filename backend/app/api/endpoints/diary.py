@@ -71,6 +71,12 @@ async def add_diary_entry(
         db.add(entry)
         await db.commit()
         
+        # Mock Inventory Update Logic
+        if "bought" in request.transcript.lower() or "purchase" in request.transcript.lower():
+            logger.info(f"Inventory: Incrementing stock for {category} by {amount} units.")
+        elif "used" in request.transcript.lower() or "applied" in request.transcript.lower():
+            logger.info(f"Inventory: Decrementing stock for {category} by {amount} units.")
+        
         return DiaryEntryResponse(
             status="success",
             extracted_data=extracted,
@@ -117,3 +123,61 @@ async def get_season_report(
     except Exception as e:
         logger.error(f"Error fetching diary report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="An error occurred while generating the report.")
+
+
+@router.get("/export/pdf")
+async def export_diary_pdf(
+    user_id: str = Query(..., description="The user external ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generates a professional PDF financial report for bank loan applications.
+    """
+    from fpdf import FPDF
+    import tempfile
+    from fastapi.responses import FileResponse
+    import os
+
+    try:
+        # Fetch entries
+        stmt = select(FarmDiary).where(FarmDiary.user_id == user_id).order_by(FarmDiary.created_at.desc())
+        result = await db.execute(stmt)
+        entries = result.scalars().all()
+
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="KrishiBondhu - Digital Farm Record", ln=True, align='C')
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 10, txt=f"Official Financial Audit for Farmer ID: {user_id}", ln=True, align='C')
+        pdf.ln(10)
+
+        # Table Header
+        pdf.set_fill_color(240, 240, 240)
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(40, 10, "Date", 1, 0, 'C', 1)
+        pdf.cell(30, 10, "Type", 1, 0, 'C', 1)
+        pdf.cell(40, 10, "Category", 1, 0, 'C', 1)
+        pdf.cell(30, 10, "Amount", 1, 0, 'C', 1)
+        pdf.cell(50, 10, "Notes", 1, 1, 'C', 1)
+
+        pdf.set_font("Arial", size=9)
+        for entry in entries:
+            pdf.cell(40, 10, str(entry.created_at.date()), 1)
+            pdf.cell(30, 10, entry.entry_type.capitalize(), 1)
+            pdf.cell(40, 10, entry.category, 1)
+            pdf.cell(30, 10, f"{entry.amount} {entry.unit}", 1)
+            pdf.cell(50, 10, entry.notes[:25] + "..." if len(entry.notes) > 25 else entry.notes, 1, 1)
+
+        temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+        pdf.output(temp.name)
+        
+        return FileResponse(
+            path=temp.name, 
+            filename=f"KrishiBondhu_Report_{user_id}.pdf",
+            media_type="application/pdf"
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating PDF: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate PDF report.")

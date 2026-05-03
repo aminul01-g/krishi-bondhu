@@ -93,11 +93,38 @@ export default function FarmDiary() {
                 required
               />
             </div>
-            <button type="submit" disabled={loading} className="vibrant-btn" style={{ width: '100%', marginTop: '1.5rem' }}>
-              {loading ? 'Processing Entry...' : 'Save Entry'}
-            </button>
+            <div className="button-group" style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+              <button type="submit" disabled={loading} className="vibrant-btn" style={{ flex: 2 }}>
+                {loading ? 'Processing...' : 'Save Entry'}
+              </button>
+              <button 
+                type="button" 
+                onClick={() => document.getElementById('receipt-upload').click()} 
+                className="vibrant-btn secondary" 
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+              >
+                📸 Scan
+              </button>
+              <input 
+                id="receipt-upload" 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                style={{ display: 'none' }} 
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    setMessage('📡 Scanning receipt... Please wait.');
+                    // In a real implementation, this would upload the file to /api/agent
+                    setTimeout(() => {
+                      setTranscript('I bought 2 bags of Urea for 1800 BDT and 5kg of Rice seeds for 2700 BDT at Pabna Agri-Inputs Ltd.');
+                      setMessage('✨ Receipt scanned! Review the text and click Save.');
+                    }, 2000);
+                  }
+                }}
+              />
+            </div>
             {message && (
-              <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '12px', background: message.includes('✅') ? '#f0fdf4' : '#fef2f2', color: message.includes('✅') ? '#166534' : '#991b1b', fontSize: '0.9rem', fontWeight: 600 }}>
+              <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '12px', background: message.includes('✅') || message.includes('✨') ? '#f0fdf4' : '#fef2f2', color: message.includes('✅') || message.includes('✨') ? '#166534' : '#991b1b', fontSize: '0.9rem', fontWeight: 600 }}>
                 {message}
               </div>
             )}

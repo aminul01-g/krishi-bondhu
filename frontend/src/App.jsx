@@ -108,10 +108,20 @@ export default function App() {
     ]
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('krishi_auth_token')
-    setIsAuthenticated(false)
-  }
+  const [syncCount, setSyncCount] = useState(0);
+
+  // Sync tracking
+  useEffect(() => {
+    const updateSync = async () => {
+      const { getQueueCount } = await import('./services/offlineQueue');
+      const count = await getQueueCount();
+      setSyncCount(count);
+    };
+
+    updateSync();
+    window.addEventListener('offline-sync-updated', updateSync);
+    return () => window.removeEventListener('offline-sync-updated', updateSync);
+  }, []);
 
   if (!isAuthenticated) {
     return <LandingPage onAuthSuccess={() => setIsAuthenticated(true)} />
@@ -130,6 +140,11 @@ export default function App() {
           </div>
 
           <div className="header-status">
+            {syncCount > 0 && (
+              <span className="sync-status-pill">
+                🔄 {isOffline ? `${syncCount} pending` : `Syncing ${syncCount}...`}
+              </span>
+            )}
             <button 
               className={`voice-mode-btn ${activeTab === 'chat' ? 'visible' : ''}`}
               onClick={() => document.getElementById('voice-trigger')?.click()}
