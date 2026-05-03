@@ -61,7 +61,7 @@ export default function ConversationHistory({ conversations, loading, onDelete }
         <div key={conv.id} className="conversation-card" style={{ background: 'white', borderRadius: '20px', padding: '1.25rem', border: '1px solid #e2e8f0', transition: 'all 0.2s' }}>
           <div className="conversation-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
             <div className="conversation-meta">
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session #{conv.id.substring(0, 6)}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session #{String(conv.id).substring(0, 6)}</div>
               <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>{formatDate(conv.created_at)}</div>
             </div>
             <button

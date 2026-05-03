@@ -24,7 +24,15 @@ export default function App() {
   const [error, setError] = useState(null)
   const [isOffline, setIsOffline] = useState(!navigator.onLine)
 
-  const wsUrl = API_BASE.replace('http', 'ws') + '/ws/agent_status'
+  const wsUrl = (() => {
+    if (API_BASE.startsWith('http')) {
+      return API_BASE.replace('http', 'ws') + '/ws/agent_status'
+    }
+    // Handle relative path (production)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    return `${protocol}//${host}${API_BASE}/ws/agent_status`
+  })()
   const { status: agentStatus, isConnected } = useAgentSocket(wsUrl)
 
   const fetchConversations = async () => {
