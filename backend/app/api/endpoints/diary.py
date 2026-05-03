@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
@@ -144,12 +145,17 @@ async def export_diary_pdf(
         result = await db.execute(stmt)
         entries = result.scalars().all()
 
+        if not entries:
+            # Return a simple response if no entries found
+            return JSONResponse(content={"message": "No diary entries found for this user. Log some transactions first!"}, status_code=404)
+
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, txt="KrishiBondhu - Digital Farm Record", ln=True, align='C')
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, txt=f"Official Financial Audit for Farmer ID: {user_id}", ln=True, align='C')
+        # Use standard fonts for now, fpdf2 handles them better
+        pdf.set_font("helvetica", 'B', 16)
+        pdf.cell(0, 10, text="KrishiBondhu - Digital Farm Record", new_x="LMARGIN", new_y="NEXT", align='C')
+        pdf.set_font("helvetica", size=10)
+        pdf.cell(0, 10, text=f"Official Financial Audit for Farmer ID: {user_id}", new_x="LMARGIN", new_y="NEXT", align='C')
         pdf.ln(10)
 
         # Table Header
@@ -161,13 +167,13 @@ async def export_diary_pdf(
         pdf.cell(30, 10, "Amount", 1, 0, 'C', 1)
         pdf.cell(50, 10, "Notes", 1, 1, 'C', 1)
 
-        pdf.set_font("Arial", size=9)
+        pdf.set_font("helvetica", size=9)
         for entry in entries:
-            pdf.cell(40, 10, str(entry.created_at.date()), 1)
-            pdf.cell(30, 10, entry.entry_type.capitalize(), 1)
-            pdf.cell(40, 10, entry.category, 1)
-            pdf.cell(30, 10, f"{entry.amount} {entry.unit}", 1)
-            pdf.cell(50, 10, entry.notes[:25] + "..." if len(entry.notes) > 25 else entry.notes, 1, 1)
+            pdf.cell(40, 10, text=str(entry.created_at.date()), border=1)
+            pdf.cell(30, 10, text=entry.entry_type.capitalize(), border=1)
+            pdf.cell(40, 10, text=entry.category, border=1)
+            pdf.cell(30, 10, text=f"{entry.amount} {entry.unit}", border=1)
+            pdf.cell(50, 10, text=entry.notes[:25] + "..." if len(entry.notes) > 25 else entry.notes, border=1, new_x="LMARGIN", new_y="NEXT")
 
         temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
         pdf.output(temp.name)

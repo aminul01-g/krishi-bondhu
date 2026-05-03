@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import yaml
+import asyncio
 from cachetools import TTLCache
 from crewai import Agent, Task, Crew, Process
 from app.config.model_config import model_registry
@@ -264,7 +265,6 @@ class KrishiCrewOrchestrator:
             # NEW: Extract and save new facts in the background to grow the memory
             if db and initial_state.get("user_id"):
                 try:
-                    import asyncio
                     asyncio.create_task(MemoryService.extract_and_save_facts(
                         db, 
                         initial_state["user_id"], 
