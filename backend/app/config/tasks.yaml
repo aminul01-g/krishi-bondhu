@@ -24,6 +24,7 @@ disease_diagnosis_task:
   description: >
     The user has uploaded an image of a crop at the path: '{image_path}'.
     Use your vision tools to analyze the image. Consider the user's input: '{user_input}'.
+    Consider the long-term farm history for context: '{farm_history}'.
     Identify the disease and recommend a treatment plan.
   expected_output: >
     A detailed diagnosis and actionable treatment plan in the user's language.
@@ -32,6 +33,7 @@ agronomy_advice_task:
   description: >
     Provide general farming advice for the user's query: '{user_input}'.
     Consider any provided weather data or location: '{gps}'.
+    Utilize the farm's historical context for better advice: '{farm_history}'.
   expected_output: >
     Clear, step-by-step farming advice.
 
@@ -39,6 +41,7 @@ weather_advice_task:
   description: >
     Analyze the weather for the user's location: '{gps}'.
     Consider the user's query: '{user_input}'.
+    Consider how this weather affects the existing farm conditions: '{farm_history}'.
   expected_output: >
     Provide actionable weather advice for farming in the user's language.
 
@@ -78,7 +81,7 @@ soil_analysis_task:
     The user wants an analysis of their soil condition.
     If an image path is provided, use the Soil Image Analyzer to determine the likely texture and organic matter content.
     If the user describes a DIY test (like ribbon length or pH color), use the DIY Soil Test Interpreter to decode it.
-    Based on the findings, formulate a precise, actionable fertilizer and soil amendment plan for their crop.
+    Based on the findings and the farm history: '{farm_history}', formulate a precise, actionable fertilizer and soil amendment plan for their crop.
     User input: "{user_input}"
     Image provided: "{image_path}"
   expected_output: >
@@ -89,7 +92,7 @@ irrigation_advice_task:
   description: >
     Provide precision irrigation advice and water hazard alerts for the user's location: '{gps}'.
     Use your satellite moisture tools to check the current root-zone soil wetness.
-    Combine this with weather forecast data (rain chance, precipitation) to calculate a water balance.
+    Combine this with weather forecast data (rain chance, precipitation) and farm history: '{farm_history}' to calculate a water balance.
     If there are high rainfall forecasts, check for flood risks.
     Format your response in actionable Bengali.
   expected_output: >

@@ -22,6 +22,7 @@ from app.api.endpoints import finance as finance_routes
 from app.api.endpoints import community as community_routes
 from app.api.endpoints import marketplace as marketplace_routes
 from app.api.endpoints import emergency as emergency_routes
+from app.api.endpoints import memory as memory_routes
 from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
 import app.models  # Register all ORM models before startup actions
@@ -99,6 +100,7 @@ app.include_router(alerts_routes.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(soil_routes.router, prefix="/api/soil", tags=["soil"])
 app.include_router(water_routes.router, prefix="/api/water", tags=["water"])
 app.include_router(finance_routes.router, prefix="/api/finance", tags=["finance"])
+app.include_router(memory_routes.router, prefix="/api/memory", tags=["memory"])
 app.include_router(community_routes.router, prefix="/api/community", tags=["community"])
 app.include_router(marketplace_routes.router, prefix="/api/marketplace", tags=["marketplace"])
 app.include_router(emergency_routes.router, prefix="/api/emergency", tags=["emergency"])
@@ -252,7 +254,8 @@ async def upload_audio(
         # Pass the websocket broadcast as the status callback to stream agent thoughts
         result = await orchestrator.ainvoke(
             initial_state, 
-            status_callback=ws_manager.broadcast
+            status_callback=ws_manager.broadcast,
+            db=db
         )
         # Ensure we always have a reply_text
         if not result.get("reply_text"):
@@ -337,7 +340,7 @@ async def upload_image(
     try:
         # Skip STT if no audio, go directly to intent/vision
         # We'll modify the flow to handle image-only queries
-        result = await orchestrator.ainvoke(initial_state)
+        result = await orchestrator.ainvoke(initial_state, db=db)
         # Ensure we always have a reply_text
         # Ensure we always have a reply_text
         if not result.get("reply_text"):
@@ -455,7 +458,7 @@ async def chat(
     }
     try:
         # For text-only chat, skip STT and go to reasoning
-        result = await orchestrator.ainvoke(initial_state)
+        result = await orchestrator.ainvoke(initial_state, db=db)
         # Ensure we always have a reply_text
         # Ensure we always have a reply_text
         if not result.get("reply_text"):

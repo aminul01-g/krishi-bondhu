@@ -15,6 +15,7 @@ from app.tools.finance_tool import SubsidyNavigatorTool, CreditScoringTool, Insu
 from app.tools.community_tool import CommunitySearchTool, EscalateToExpertTool
 from app.tools.marketplace_tool import DealerSearchTool, ProductVerificationTool, LabelScannerTool
 from app.tools.emergency_tool import CropDamageAssessmentTool, DamageReportGeneratorTool, SMSShareTool
+from app.services.memory import MemoryService
 
 # 1. Setup Structured Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -120,7 +121,7 @@ class KrishiCrewOrchestrator:
         """Create a deterministic cache key based on inputs."""
         return f"{user_input}_{gps}_{image_path}"
 
-    async def ainvoke(self, initial_state: dict, trace_id: str = "unknown", status_callback=None) -> dict:
+    async def ainvoke(self, initial_state: dict, trace_id: str = "unknown", status_callback=None, db=None) -> dict:
         user_input = initial_state.get("transcript", "")
         gps = initial_state.get("gps")
         image_path = initial_state.get("image_path")
@@ -143,6 +144,12 @@ class KrishiCrewOrchestrator:
             initial_state["reply_text"] = response_cache[cache_key]
             return initial_state
 
+        # 4. Fetch Long-Term Memory (Farm History)
+        farm_history = "No previous history."
+        if db and initial_state.get("user_id"):
+            farm_history = await MemoryService.get_user_memory(db, initial_state["user_id"])
+            logger.info(f"Memory RETRIEVED for user {initial_state['user_id']}")
+
         logger.info(f"Processing new request: {user_input[:50]}")
         
         agents_tuple = self._create_agents()
@@ -162,7 +169,8 @@ class KrishiCrewOrchestrator:
                 "user_input": user_input,
                 "gps": str(gps) if gps else "None",
                 "image_path": str(image_path) if image_path else "None",
-                "user_id": initial_state.get("user_id", "anonymous")
+                "user_id": initial_state.get("user_id", "anonymous"),
+                "farm_history": farm_history
             }
             route_result = await asyncio.to_thread(router_crew.kickoff, inputs=inputs)
             route_str = str(route_result).replace("```json", "").replace("```", "").strip()
@@ -251,15 +259,18 @@ class KrishiCrewOrchestrator:
             
             initial_state["reply_text"] = final_text
             
-            # NEW: Persist any staged tool data (like market prices) to DB
-            if intent == "market" and hasattr(self, 'market_tool'):
+            # NEW: Extract and save new facts in the background to grow the memory
+            if db and initial_state.get("user_id"):
                 try:
-                    from app.db import AsyncSessionLocal
-                    async with AsyncSessionLocal() as db_session:
-                        await self.market_tool.save_prices_to_db(db_session)
-                except Exception as db_e:
-                    logger.warning(f"Failed to persist market tool data: {db_e}")
-                    
+                    import asyncio
+                    asyncio.create_task(MemoryService.extract_and_save_facts(
+                        db, 
+                        initial_state["user_id"], 
+                        f"User: {user_input}\nAssistant: {final_text}"
+                    ))
+                except Exception as mem_e:
+                    logger.warning(f"Failed to trigger fact extraction task: {mem_e}")
+
             return initial_state
             
         except Exception as e:

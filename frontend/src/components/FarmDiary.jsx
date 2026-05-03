@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../api';
+import { saveToQueue } from '../services/offlineQueue';
 
 export default function FarmDiary() {
   const [transcript, setTranscript] = useState('');
@@ -35,11 +36,27 @@ export default function FarmDiary() {
     
     setLoading(true);
     setMessage('');
+
+    const payload = { user_id: userId, transcript };
+    const url = `${API_BASE}/diary/add`;
+
     try {
-      const response = await fetch(`${API_BASE}/diary/add`, {
+      if (!navigator.onLine) {
+        // Create a fake FormData for the queue (as current queue expects FormData)
+        const fd = new FormData();
+        fd.append('user_id', userId);
+        fd.append('transcript', transcript);
+        
+        await saveToQueue(url, fd);
+        setMessage('⏳ Offline: Entry saved locally. It will sync automatically when you have signal.');
+        setTranscript('');
+        return;
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, transcript })
+        body: JSON.stringify(payload)
       });
       
       const result = await response.json();

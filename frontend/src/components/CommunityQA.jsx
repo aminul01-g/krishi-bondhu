@@ -1,41 +1,73 @@
 import React, { useState } from 'react';
+import './CommunityQA.css';
 
 export default function CommunityQA() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState([
+    { id: 1, text: "How do I treat leaf curl virus in tomatoes?", author: "Rahman P.", date: "2h ago", answer: "Use neem oil spray and remove infected leaves." },
+    { id: 2, text: "Best fertilizer for Aman rice?", author: "Kashem S.", date: "5h ago", answer: "Apply Urea in three split doses for better nitrogen efficiency." }
+  ]);
   
   const handleSearch = (e) => {
     e.preventDefault();
-    // In a real implementation, this would call /api/community/search
-    setResults([
-      { id: 1, text: "How do I treat leaf curl virus in tomatoes?", answer: "Use neem oil spray and remove infected leaves." },
-      { id: 2, text: "Best fertilizer for Aman rice?", answer: "Apply Urea in three split doses." }
-    ]);
+    // Simulate search
   };
 
   return (
-    <div className="community-container">
-      <form onSubmit={handleSearch} className="search-form" style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <input 
-          type="text" 
-          value={query} 
-          onChange={(e) => setQuery(e.target.value)} 
-          placeholder="Ask the community..."
-          style={{ flex: 1, padding: '10px', borderRadius: '5px', border: '1px solid #ccc' }}
-        />
-        <button type="submit" style={{ padding: '10px 20px', borderRadius: '5px', background: '#2e7d32', color: 'white', border: 'none' }}>Search</button>
-      </form>
-      
-      <div className="results-list" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        {results.map(r => (
-          <div key={r.id} className="result-card" style={{ padding: '15px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', borderLeft: '4px solid #4caf50' }}>
-            <h4 style={{ margin: '0 0 10px 0' }}>Q: {r.text}</h4>
-            <p style={{ margin: 0, color: '#aaa' }}>A: {r.answer}</p>
+    <div className="community-qa">
+      <div className="community-layout">
+        <div className="qa-section">
+          <form onSubmit={handleSearch} className="community-search-box glassmorphism">
+            <input 
+              type="text" 
+              value={query} 
+              onChange={(e) => setQuery(e.target.value)} 
+              placeholder="Search conversations or ask a new question..."
+            />
+            <button type="submit">Ask</button>
+          </form>
+          
+          <div className="qa-list">
+            {results.map(r => (
+              <div key={r.id} className="qa-card glassmorphism">
+                <div className="qa-meta">
+                  <span className="qa-author">{r.author}</span>
+                  <span className="qa-date">{r.date}</span>
+                </div>
+                <h4>{r.text}</h4>
+                <p className="qa-answer"><strong>Expert Advice:</strong> {r.answer}</p>
+                <div className="qa-actions">
+                  <button className="text-btn">👍 12 Helpful</button>
+                  <button className="text-btn">💬 4 Comments</button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={{ marginTop: '20px', textAlign: 'center' }}>
-        <button style={{ background: 'transparent', color: '#4caf50', border: '1px solid #4caf50', padding: '8px 16px', borderRadius: '5px' }}>Escalate to Expert</button>
+        </div>
+
+        <aside className="community-sidebar">
+          <div className="outbreak-map-card glassmorphism">
+            <h3>⚠️ Regional Outbreak Heatmap</h3>
+            <p>Anonymized real-time pest alerts in your district.</p>
+            <div className="heatmap-placeholder">
+              <div className="heatmap-circle high"></div>
+              <div className="heatmap-circle medium"></div>
+              <div className="heatmap-circle low"></div>
+              <span className="map-label">Pabna District</span>
+            </div>
+            <ul className="alert-list">
+              <li className="high-risk">🦗 Locust Alert (High Risk)</li>
+              <li className="medium-risk">🐛 Stem Borer (Medium Risk)</li>
+            </ul>
+            <button className="vibrant-btn small">Report Outbreak</button>
+          </div>
+
+          <div className="expert-card glassmorphism">
+            <h3>🎓 Expert Consultation</h3>
+            <p>Can't find an answer? Escalate to a government extension officer.</p>
+            <button className="vibrant-btn secondary">Connect with Expert</button>
+          </div>
+        </aside>
       </div>
     </div>
   );

@@ -459,8 +459,35 @@ export default function Chatbot({ onMessageComplete }) {
     }
   }, [])
 
+  // NEW: Voice Trigger for Hands-free mode
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+        console.log('Voice command heard:', transcript);
+        if (transcript.includes('krishi') || transcript.includes('hey bondhu')) {
+          if (!recording && !processing) {
+            startRecording();
+          }
+        }
+      };
+
+      // This is a toggleable effect, but for now we just define it.
+      // In a real app, we'd start/stop this based on a prop.
+    }
+  }, [recording, processing]);
+
   return (
     <div className="chatbot" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '500px' }}>
+      {/* Hidden trigger for Hands-free button in App.jsx */}
+      <button id="voice-trigger" onClick={startRecording} style={{ display: 'none' }}></button>
+      
       <div className="chat-messages" style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {messages.map((msg, idx) => (
           <div key={idx} className={`message ${msg.role}`} style={{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>

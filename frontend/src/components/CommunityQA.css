@@ -1,0 +1,157 @@
+.community-qa {
+  padding: 1rem;
+}
+
+.community-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 2rem;
+}
+
+@media (max-width: 900px) {
+  .community-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.community-search-box {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 2rem;
+  border-radius: 20px;
+}
+
+.community-search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 1.1rem;
+  color: var(--text-main);
+}
+
+.community-search-box button {
+  padding: 0.75rem 2rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.qa-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.qa-card {
+  padding: 1.5rem;
+  border-radius: 24px;
+}
+
+.qa-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.qa-card h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  color: #0f172a;
+}
+
+.qa-answer {
+  background: rgba(16, 185, 129, 0.05);
+  padding: 1rem;
+  border-radius: 12px;
+  border-left: 4px solid var(--primary);
+  color: #334155;
+  line-height: 1.6;
+}
+
+.qa-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.text-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* Sidebar */
+.community-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.outbreak-map-card {
+  padding: 1.5rem;
+  border-radius: 24px;
+}
+
+.heatmap-placeholder {
+  height: 150px;
+  background: #e2e8f0;
+  border-radius: 16px;
+  margin: 1.5rem 0;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.map-label {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.heatmap-circle {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(15px);
+  opacity: 0.6;
+}
+
+.heatmap-circle.high { width: 80px; height: 80px; background: #ef4444; top: 20%; left: 30%; }
+.heatmap-circle.medium { width: 60px; height: 60px; background: #f59e0b; bottom: 20%; right: 20%; }
+.heatmap-circle.low { width: 40px; height: 40px; background: #3b82f6; top: 10%; right: 40%; }
+
+.alert-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+}
+
+.alert-list li {
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.high-risk { color: #ef4444; }
+.medium-risk { color: #f59e0b; }
+
+.vibrant-btn.small {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}

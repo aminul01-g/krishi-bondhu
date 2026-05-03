@@ -97,6 +97,25 @@ class MarketPrice(Base):
     market_trend = Column(String, nullable=True)  # 'Uptrend', 'Downtrend', 'Stable'
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
+class KnowledgeFact(Base):
+    __tablename__ = "knowledge_facts"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    fact_key = Column(String, index=True) # e.g., 'crop_type', 'soil_status'
+    fact_value = Column(Text)
+    confidence = Column(Float, default=1.0)
+    source_conv_id = Column(Integer, nullable=True)
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class AsyncTask(Base):
+    __tablename__ = "async_tasks"
+    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, index=True)
+    task_type = Column(String) # 'chat_analysis', 'satellite_scan'
+    status = Column(String, default='pending') # 'pending', 'processing', 'completed', 'failed'
+    result = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 # Import additional models so metadata includes them during migrations and runtime
 from . import community_models  # noqa: F401

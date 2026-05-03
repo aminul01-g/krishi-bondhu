@@ -10,6 +10,7 @@ import FinanceHub from './components/FinanceHub'
 import CommunityQA from './components/CommunityQA'
 import Marketplace from './components/Marketplace'
 import EmergencySupport from './components/EmergencySupport'
+import FarmOverview from './components/FarmOverview'
 import LandingPage from './components/LandingPage'
 import { API_BASE } from './api'
 import { useAgentSocket } from './hooks/useAgentSocket'
@@ -18,7 +19,7 @@ import './App.css'
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('krishi_auth_token'))
-  const [activeTab, setActiveTab] = useState('chat')
+  const [activeTab, setActiveTab] = useState('overview')
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -89,6 +90,7 @@ export default function App() {
 
   const tabGroups = {
     'Core AI Assistant': [
+      { id: 'overview', label: 'Farm Intelligence', icon: '🧠' },
       { id: 'chat', label: 'AI Chat', icon: '💬' },
       { id: 'market', label: 'Market Intelligence', icon: '📈' },
       { id: 'tips', label: 'Daily Tips', icon: '💡' }
@@ -128,6 +130,13 @@ export default function App() {
           </div>
 
           <div className="header-status">
+            <button 
+              className={`voice-mode-btn ${activeTab === 'chat' ? 'visible' : ''}`}
+              onClick={() => document.getElementById('voice-trigger')?.click()}
+              title="Hands-free mode"
+            >
+              🎙️
+            </button>
             <span className={`status-pill ${isConnected ? 'online' : 'offline'}`}>
               {isConnected ? `🟢 ${agentStatus?.message || agentStatus?.type || 'Agent ready'}` : '🔴 Reconnecting...'}
             </span>
@@ -179,6 +188,14 @@ export default function App() {
             <section className="content-area">
               <div className="content-card glassmorphism">
 
+
+                {activeTab === 'overview' && (
+                  <>
+                    <h2>🧠 Farm Intelligence Dashboard</h2>
+                    <p className="section-description">A high-level view of your farm's state, history, and environmental status.</p>
+                    <FarmOverview userId="user_123" />
+                  </>
+                )}
 
                 {activeTab === 'chat' && (
                   <>
