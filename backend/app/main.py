@@ -51,7 +51,8 @@ async def save_conversation_to_db(
     transcript: str, 
     reply_text: str,
     metadata: dict = None,
-    tts_path: str = None
+    tts_path: str = None,
+    media_url: str = None
 ):
     try:
         if not user_db_id:
@@ -60,8 +61,9 @@ async def save_conversation_to_db(
         conv = Conversation(
             user_id=user_db_id,
             transcript=transcript,
-            meta_data={"reply_text": reply_text, **(metadata or {})}, # Store reply in metadata as per schema
-            tts_path=tts_path
+            meta_data={"reply_text": reply_text, **(metadata or {})},
+            tts_path=tts_path,
+            media_url=media_url
         )
         db.add(conv)
         await db.commit()
@@ -268,7 +270,8 @@ async def upload_audio(
                 "stt_source": result.get("stt_source"),
                 "gps": result.get("gps")
             },
-            tts_path=result.get("tts_path")
+            tts_path=result.get("tts_path"),
+            media_url=image_path
         )
 
         # Clean up non-serializable objects for JSON response
@@ -351,7 +354,8 @@ async def upload_image(
                 "language": result.get("language"),
                 "gps": result.get("gps")
             },
-            tts_path=result.get("tts_path")
+            tts_path=result.get("tts_path"),
+            media_url=image_path
         )
         
         # Clean up non-serializable objects for JSON response
@@ -468,7 +472,8 @@ async def chat(
                 "language": result.get("language"),
                 "gps": result.get("gps")
             },
-            tts_path=result.get("tts_path")
+            tts_path=result.get("tts_path"),
+            media_url=image_path
         )
 
         # Clean up non-serializable objects for JSON response

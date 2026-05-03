@@ -80,30 +80,63 @@ export default function ConversationHistory({ conversations, loading, onDelete }
                   <span style={{ fontSize: '1rem' }}>👤</span>
                   <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Farmer</span>
                 </div>
-                <div style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 500, paddingLeft: '1.75rem' }}>{conv.transcript}</div>
+                <div style={{ fontSize: '0.95rem', color: '#1e293b', fontWeight: 500, paddingLeft: '1.75rem' }}>
+                  {(() => {
+                    const text = typeof conv.transcript === 'string' ? conv.transcript : JSON.stringify(conv.transcript)
+                    return text?.trim() ? text : "[Image/Voice Query]"
+                  })()}
+                </div>
               </div>
             )}
 
-            {conv.metadata && conv.metadata.reply_text && (
-              <div className="conversation-item" style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '14px', border: '1px solid #dcfce7' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '1rem' }}>🤖</span>
-                  <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#059669', textTransform: 'uppercase' }}>Krishi AI</span>
+            {(() => {
+              let meta = conv.metadata
+              if (typeof meta === 'string') {
+                try { meta = JSON.parse(meta) } catch (e) { meta = {} }
+              }
+              const replyText = meta?.reply_text
+              return replyText ? (
+                <div className="conversation-item" style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '14px', border: '1px solid #dcfce7' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1rem' }}>🤖</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#059669', textTransform: 'uppercase' }}>Krishi AI</span>
+                  </div>
+                  <div style={{ fontSize: '0.95rem', color: '#064e3b', lineHeight: 1.6, fontWeight: 500 }}>
+                    {typeof replyText === 'string' ? replyText : JSON.stringify(replyText)}
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.95rem', color: '#064e3b', lineHeight: 1.6, fontWeight: 500 }}>{conv.metadata.reply_text}</div>
-              </div>
-            )}
+              ) : null
+            })()}
             
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
-              {conv.metadata?.crop && <span style={{ background: '#dcfce7', color: '#166534', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🌾 {conv.metadata.crop}</span>}
-              {conv.metadata?.language && <span style={{ background: '#f1f5f9', color: '#475569', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🌐 {conv.metadata.language === 'bn' ? 'Bengali' : 'English'}</span>}
-              {conv.confidence && <span style={{ background: '#eff6ff', color: '#1e40af', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🎯 {(conv.confidence * 100).toFixed(0)}% Match</span>}
-            </div>
+            {(() => {
+              let meta = conv.metadata
+              if (typeof meta === 'string') {
+                try { meta = JSON.parse(meta) } catch (e) { meta = {} }
+              }
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {meta?.crop && <span style={{ background: '#dcfce7', color: '#166534', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🌾 {meta.crop}</span>}
+                  {meta?.language && <span style={{ background: '#f1f5f9', color: '#475569', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🌐 {meta.language === 'bn' ? 'Bengali' : 'English'}</span>}
+                  {conv.confidence && <span style={{ background: '#eff6ff', color: '#1e40af', padding: '0.25rem 0.75rem', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 700 }}>🎯 {(conv.confidence * 100).toFixed(0)}% Match</span>}
+                </div>
+              )
+            })()}
 
             {conv.media_url && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <a href={conv.media_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', color: '#3b82f6', fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none' }}>
-                  <span>🖼️</span> View Attached Image
+              <div style={{ marginTop: '0.75rem', borderRadius: '12px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                <img 
+                  src={conv.media_url.startsWith('http') ? conv.media_url : `${API_BASE.replace('/api', '')}/${conv.media_url}`} 
+                  alt="Attachment" 
+                  style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', display: 'block' }} 
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
+                <a 
+                  href={conv.media_url.startsWith('http') ? conv.media_url : `${API_BASE.replace('/api', '')}/${conv.media_url}`} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  style={{ display: 'block', padding: '0.5rem', textAlign: 'center', background: '#f8fafc', color: '#3b82f6', fontSize: '0.75rem', fontWeight: 700, textDecoration: 'none', borderTop: '1px solid #e2e8f0' }}
+                >
+                  🔍 View Full Image
                 </a>
               </div>
             )}

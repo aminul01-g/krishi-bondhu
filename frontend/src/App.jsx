@@ -30,14 +30,18 @@ export default function App() {
   const fetchConversations = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`${API_BASE}/conversations`)
+      const response = await fetch(`${API_BASE}/conversations?t=${Date.now()}`, {
+        cache: 'no-store'
+      })
       if (!response.ok) throw new Error('Failed to fetch conversations')
       const data = await response.json()
-      setConversations(data)
-      setError(null)
+      if (Array.isArray(data)) {
+        setConversations(data)
+        setError(null)
+      }
     } catch (err) {
       console.error('Error fetching conversations:', err)
-      setError(err.message)
+      setError('Connection issue. Retrying...')
     } finally {
       setLoading(false)
     }
@@ -45,7 +49,6 @@ export default function App() {
 
   useEffect(() => {
     fetchConversations()
-    const interval = setInterval(fetchConversations, 10000)
 
     const handleOnline = () => {
       setIsOffline(false)
@@ -58,14 +61,16 @@ export default function App() {
     window.addEventListener('offline', handleOffline)
 
     return () => {
-      clearInterval(interval)
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
   }, [])
 
   const handleNewConversation = () => {
-    setTimeout(fetchConversations, 2000)
+    // Refresh history automatically after a new message
+    fetchConversations()
+    setTimeout(fetchConversations, 1500)
+    setTimeout(fetchConversations, 4000)
   }
 
   const tabGroups = {
