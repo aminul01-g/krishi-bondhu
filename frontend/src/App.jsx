@@ -123,6 +123,11 @@ export default function App() {
     return () => window.removeEventListener('offline-sync-updated', updateSync);
   }, []);
 
+  const handleLogout = () => {
+    localStorage.removeItem('krishi_auth_token');
+    setIsAuthenticated(false);
+  };
+
   if (!isAuthenticated) {
     return <LandingPage onAuthSuccess={() => setIsAuthenticated(true)} />
   }
