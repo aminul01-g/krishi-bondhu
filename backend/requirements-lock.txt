@@ -682,6 +682,8 @@ python-dotenv==1.0.0
     #   embedchain
     #   pydantic-settings
     #   uvicorn
+redis==5.2.1
+    # via krishibondhu-backend (pyproject.toml)
 python-multipart==0.0.27
     # via krishibondhu-backend (pyproject.toml)
 python-rapidjson==1.23
