@@ -33,6 +33,7 @@ from app.services.memory import MemoryService
 from app.api.endpoints import memory as memory_routes
 from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
+from app.core.dependencies import get_current_user
 import app.models  # Register all ORM models before startup actions
 
 from app.core.logging import get_logger
