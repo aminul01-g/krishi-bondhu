@@ -26,6 +26,7 @@ WORKDIR $APP_HOME
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    build-essential \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
@@ -33,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libgomp1 \
     libsndfile1 \
+    libzbar0 \
+    tesseract-ocr \
     gcc \
     python3-dev \
     libpq-dev \
