@@ -511,6 +511,13 @@ async def get_tts(path: str):
 async def serve_spa(full_path: str):
     if full_path.startswith("api"):
         return JSONResponse({"detail": "Not Found"}, status_code=404)
+    
+    # Serve static assets if they exist (CSS, JS, manifest, SW, etc.)
+    file_path = os.path.join("static", full_path)
+    if os.path.isfile(file_path):
+        return FileResponse(file_path)
+        
+    # Fallback to index.html for React Router
     index_path = os.path.join("static", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
