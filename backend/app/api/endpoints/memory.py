@@ -79,8 +79,8 @@ async def get_farm_memory(
 
 @router.delete("/{user_id}/{fact_key}")
 async def delete_memory_fact(
-    current_user: User = Depends(get_current_user),
     fact_key: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
