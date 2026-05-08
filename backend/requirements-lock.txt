@@ -950,3 +950,7 @@ yt-dlp==2023.12.30
     # via embedchain
 zipp==3.23.1
     # via importlib-metadata
+python-jose[cryptography]==3.3.0
+    # via krishibondhu-backend (added manually)
+passlib[bcrypt]==1.7.4
+    # via krishibondhu-backend (added manually)
