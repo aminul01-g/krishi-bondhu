@@ -1,10 +1,8 @@
 import os
 from typing import Any
 
-from crewai import BaseLLM
 
-
-class FallbackLLM(BaseLLM):
+class FallbackLLM:
     """Fallback LLM used when no external provider is configured."""
 
     model: str = "fallback"
