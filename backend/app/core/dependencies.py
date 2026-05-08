@@ -39,3 +39,11 @@ async def get_current_user(
 # The orchestrator is now managed via the Crew classes in app.crews.krishi_crew
 # We remove the global KrishiCrewOrchestrator singleton and use the new Crew definitions.
 # The endpoints will instantiate the specific Crew they need.
+
+class _OrchestratorStub:
+    def __getattr__(self, name):
+        raise RuntimeError(
+            "The global orchestrator is deprecated. Use Crew classes in app.crews.krishi_crew instead."
+        )
+
+orchestrator = _OrchestratorStub()

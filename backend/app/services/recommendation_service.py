@@ -2,7 +2,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.db_models import SoilTestLog, IrrigationLog, CuratedTip, KnowledgeFact
-from app.core.dependencies import orchestrator
+from app.crews.krishi_crew import HealthAndSoilCrew
 import logging
 
 logger = logging.getLogger("RecommendationService")
@@ -53,7 +53,7 @@ class RecommendationService:
                 "available_tips": [tip.tip_text_bn for tip in tips]
             }
 
-            # 5. Use the Orchestrator/LLM to create a personalized response in Bengali
+            # 5. Use the HealthAndSoilCrew to create a personalized response in Bengali
             prompt = (
                 f"Based on the following farm data for a user growing {crop}, "
                 f"create a personalized advice message in Bengali. "
@@ -62,15 +62,24 @@ class RecommendationService:
                 "Be encouraging and specific."
             )
 
-            initial_state = {
-                "transcript": prompt,
-                "user_id": user_id,
-                "messages": []
-            }
-
-            result = await orchestrator.ainvoke(initial_state)
+            # Create and run the crew for personalized recommendations
+            crew_instance = HealthAndSoilCrew()
+            crew = crew_instance.create_crew()
+            
+            # Kickoff the crew synchronously using the prompt context
+            try:
+                result = crew.kickoff(inputs={
+                    "transcript": prompt,
+                    "user_id": user_id,
+                    "context": context
+                })
+                personalized_advice = str(result) if result else "Failed to generate advice"
+            except Exception as crew_error:
+                logger.warning(f"Crew execution failed: {crew_error}")
+                personalized_advice = "Failed to generate advice"
+            
             return {
-                "personalized_advice": result.get("reply_text", "আপনার ফসলের জন্য বিশেষ পরামর্শ তৈরি করা সম্ভব হয়নি।"),
+                "personalized_advice": personalized_advice,
                 "supporting_tips": [tip.tip_text_bn for tip in tips],
                 "data_snapshot": context
             }

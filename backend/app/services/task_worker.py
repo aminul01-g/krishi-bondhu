@@ -4,7 +4,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import AsyncSessionLocal
 from app.models.db_models import AsyncTask
-from app.core.dependencies import orchestrator
 from app.core.logging import get_logger
 
 logger = get_logger("task_worker")
