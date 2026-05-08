@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
 import uuid
+import asyncio
 from dotenv import load_dotenv
 
 # Load environment variables before importing LLM/agent modules.
@@ -521,4 +522,4 @@ async def serve_spa(full_path: str):
     index_path = os.path.join("static", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return JSONResponse(status_code=404, detail="Frontend not built")
+    return JSONResponse(status_code=404, content={"detail": "Frontend not built"})
