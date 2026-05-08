@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from crewai.llms.base_llm import BaseLLM
+from crewai import BaseLLM
 
 
 class FallbackLLM(BaseLLM):
