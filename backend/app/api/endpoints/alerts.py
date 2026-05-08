@@ -6,7 +6,12 @@ import logging
 
 from app.db import get_db
 from app.models.db_models import CuratedTip, User
-from app.core.dependencies import orchestrator, get_current_user
+from app.core.dependencies import get_current_user
+from app.agents.alert_advisor import alert_advisor
+from crewai import Crew, Process, Task
+
+router = APIRouter()
+logger = logging.getLogger("alerts_api")
 
 class DailyAlertResponse(BaseModel):
     user_id: str
@@ -48,15 +53,24 @@ async def get_daily_alert(
         if lat and lon:
             gps_data = {"lat": lat, "lon": lon}
             
-        initial_state = {
-            "transcript": prompt,
-            "gps": gps_data,
-            "image_path": None
-        }
+        # Create a task for the alert advisor
+        alert_task = Task(
+            description=f"Analyze pest risk for {crop} crop. GPS data: {gps_data}. Provide a brief warning about potential pest or disease risks based on current conditions.",
+            agent=alert_advisor,
+            expected_output="A brief pest risk alert in Bengali language."
+        )
         
-        # This will trigger the 'alerts' intent
-        result_state = await orchestrator.ainvoke(initial_state)
-        pest_risk_alert = result_state.get("reply_text", "Failed to retrieve risk data.")
+        # Create a crew with just the alert advisor
+        alert_crew = Crew(
+            agents=[alert_advisor],
+            tasks=[alert_task],
+            process=Process.sequential,
+            verbose=False
+        )
+        
+        # Run the crew to get the pest risk alert
+        result = alert_crew.kickoff()
+        pest_risk_alert = str(result) if result else "Failed to retrieve risk data."
 
         return DailyAlertResponse(
             user_id=user_id,
