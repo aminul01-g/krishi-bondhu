@@ -1,14 +1,47 @@
 import React, { useState } from 'react';
+import { API_BASE } from '../api';
 
 export default function Marketplace() {
   const [barcode, setBarcode] = useState('');
   const [status, setStatus] = useState(null);
 
-  const handleVerify = () => {
-    if (barcode.includes('123')) {
-      setStatus({ type: 'success', msg: 'Product Verified! Authentic Dealer.' });
-    } else {
-      setStatus({ type: 'error', msg: 'Warning: Product barcode not recognized.' });
+  const handleVerify = async () => {
+    if (!barcode.trim()) {
+      setStatus({ type: 'error', msg: 'Please enter a barcode.' });
+      return;
+    }
+
+    setStatus({ type: 'info', msg: 'Verifying authenticity...' });
+
+    try {
+      const userId = localStorage.getItem('krishi_user_id') || 'farmer_123';
+      const response = await fetch(`${API_BASE}/marketplace/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          farmer_id_hashed: userId,
+          barcode: barcode.trim()
+        })
+      });
+
+      if (!response.ok) throw new Error('Server error during verification');
+
+      const data = await response.json();
+      const status = data.verification_status;
+
+      if (status === 'verified') {
+        setStatus({
+          type: 'success',
+          msg: `✅ Product Verified! ${data.product_name || 'Authentic Product'}. Dealer is verified.`
+        });
+      } else if (status === 'suspicious') {
+        setStatus({ type: 'warning', msg: '⚠️ Warning: Product not found in verified database. Use caution.' });
+      } else {
+        setStatus({ type: 'error', msg: '🚨 STATUS RED: Counterfeit warning. Do not purchase!' });
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
+      setStatus({ type: 'error', msg: 'Failed to connect to verification server.' });
     }
   };
 

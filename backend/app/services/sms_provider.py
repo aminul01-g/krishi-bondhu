@@ -27,11 +27,32 @@ class NexmoSMSProvider(SMSProviderBase):
     def __init__(self, api_key: str, api_secret: str):
         self.api_key = api_key
         self.api_secret = api_secret
+        self.api_url = "https://rest.nexmo.com/sms/send"
 
     async def send(self, phone: str, message: str) -> Dict:
-        # Replace with actual Nexmo/Vonage integration if enabled
-        print(f"[NEXMO SMS] To={phone} Message={message}")
-        return {"success": True, "provider": "nexmo", "phone": phone, "message": message}
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.api_url,
+                    data={
+                        "api_key": self.api_key,
+                        "api_secret": self.api_secret,
+                        "to": phone,
+                        "from": "KrishiBondhu",
+                        "text": message,
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get("messages", [{}])[0].get("status") == "OK":
+                    return {"success": True, "provider": "nexmo", "phone": phone, "message": message}
+                else:
+                    return {"success": False, "provider": "nexmo", "error": data}
+        except Exception as e:
+            print(f"[NEXMO SMS ERROR] {e}")
+            return {"success": False, "provider": "nexmo", "error": str(e)}
 
 
 def get_sms_provider() -> SMSProviderBase:

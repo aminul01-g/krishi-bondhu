@@ -1,64 +1,84 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
+from app.db import get_db_session
+from app.services.soil_service import SoilService
+from app.core.dependencies import get_current_user
+from app.models.db_models import User
+from app.crews.krishi_crew import HealthAndSoilCrew
 import logging
-from app.db import get_db
-from app.models.db_models import SoilTestLog
-# from app.crews.krishi_crew import KrishiCrewOrchestrator  # Lazy import to avoid circular deps
+import os
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
+logger = logging.getLogger("soil_api")
+soil_service = SoilService()
 
-from app.core.dependencies import orchestrator
+class SoilAnalysisResponse(BaseModel):
+    analysis: str
+    recommendations: str = None
 
-class SoilAnalyzeRequest(BaseModel):
-    user_id: str
-    image_url: Optional[str] = None
-    diy_inputs: Optional[Dict[str, Any]] = None
-    crop: str = "Unknown"
-
-class SoilAnalyzeResponse(BaseModel):
-    advice: str
-    log_id: str
-
-@router.post("/analyze", response_model=SoilAnalyzeResponse)
-async def analyze_soil(request: SoilAnalyzeRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/analyze-image")
+async def analyze_soil_image(
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    lat: float = Form(None),
+    lon: float = Form(None),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Analyzes soil image using the fallback chain: ViT -> Groq -> Rules.
+    """
     try:
-        # Construct the natural language input to leverage the CrewAI router
-        input_text = f"Analyze my soil for crop: {request.crop}."
-        if request.diy_inputs:
-            input_text += f" I did a DIY test: {request.diy_inputs}."
+        # Save image locally
+        from app.api.utils import save_image_local
+        image_path = await save_image_local(image)
 
-        initial_state = {
-            "transcript": input_text,
-            "gps": None,
-            "image_path": request.image_url
+        # Use specialized HealthAndSoilCrew
+        crew_obj = HealthAndSoilCrew()
+        crew = crew_obj.create_crew()
+
+        from crewai import Task
+        from app.agents.soil_scientist import soil_scientist
+
+        soil_task = Task(
+            description=f"Analyze the soil image at {image_path}. Identify texture and organic matter, then provide localized fertilizer advice.",
+            expected_output="A detailed soil health report with texture classification and specific nutrient recommendations.",
+            agent=soil_scientist
+        )
+
+        inputs = {
+            "image_path": image_path,
+            "gps": {"lat": lat, "lon": lon},
+            "user_id": current_user.external_id
         }
 
-        # The orchestrator will route to 'soil_scientist_agent' if the intent is recognized as 'soil'
-        # Or we can force it by prefixing with an explicit soil request.
-        initial_state["transcript"] = "Soil analysis request: " + initial_state["transcript"]
+        import asyncio
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[soil_task])
 
-        result = await orchestrator.ainvoke(initial_state)
-        advice = result.get("reply_text", "Could not analyze soil.")
-
-        # Save to DB
-        new_log = SoilTestLog(
-            id=str(uuid.uuid4()),
-            user_id=request.user_id,
-            crop=request.crop,
-            image_url=request.image_url,
-            diy_inputs=request.diy_inputs,
-            recommendations={"advice": advice}
-        )
-        db.add(new_log)
-        await db.commit()
-        await db.refresh(new_log)
-
-        return SoilAnalyzeResponse(advice=advice, log_id=new_log.id)
+        return SoilAnalysisResponse(analysis=str(result))
 
     except Exception as e:
-        logger.error(f"Soil analysis failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to analyze soil")
+        logger.error(f"Error analyzing soil image: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred while analyzing the soil image.")
+
+@router.post("/interpret-test")
+async def interpret_diy_test(
+    test_data: str = Form(...),
+    crop: str = Form("general"),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Interprets DIY soil test results (Ribbon/pH/Jar).
+    """
+    try:
+        # Use service layer directly for deterministic rule-based logic
+        interpretation = soil_service.interpret_diy_test(test_data)
+        recommendations = soil_service.recommend_fertilizer(interpretation, crop)
+
+        return SoilAnalysisResponse(
+            analysis=interpretation,
+            recommendations=recommendations
+        )
+    except Exception as e:
+        logger.error(f"Error interpreting DIY test: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid test data: {str(e)}")

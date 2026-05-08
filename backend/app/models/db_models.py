@@ -7,6 +7,8 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
     external_id = Column(String, unique=True, index=True)  # farmer id from frontend
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

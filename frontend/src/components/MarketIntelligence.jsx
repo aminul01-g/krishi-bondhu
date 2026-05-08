@@ -26,14 +26,14 @@ export default function MarketIntelligence() {
   };
 
   return (
-    <div className="feature-container">
+    <div className="feature-container" data-testid="market-intelligence-section">
       <div className="feature-header">
         <h2>📈 Smart Market Intelligence</h2>
         <p>Real-time wholesale prices, trend predictions, and strategic selling advice tailored for your farm.</p>
       </div>
 
       <div className="feature-content-grid" style={{ display: 'grid', gap: '2rem' }}>
-        <form onSubmit={fetchMarketAdvice} className="feature-form">
+        <form onSubmit={fetchMarketAdvice} className="feature-form" data-testid="market-form">
           <div className="input-group">
             <label style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', display: 'block' }}>Which crop are you monitoring?</label>
             <input 
@@ -43,17 +43,40 @@ export default function MarketIntelligence() {
               placeholder="e.g., Potato, Rice, Tomato..." 
               style={{ padding: '1.25rem', borderRadius: '16px', border: '1px solid #e2e8f0', fontSize: '1rem', width: '100%' }}
               required
+              data-testid="market-crop-input"
             />
           </div>
-          <button type="submit" disabled={loading} className="vibrant-btn" style={{ width: '100%', marginTop: '1rem' }}>
+          <button type="submit" disabled={loading} className="vibrant-btn" style={{ width: '100%', marginTop: '1rem' }} data-testid="market-submit-btn">
             {loading ? 'Analyzing Trends...' : 'Fetch Market Advice'}
           </button>
         </form>
 
-        {error && <div className="error-message">{error}</div>}
+        {/* Error State */}
+        {error && (
+          <div className="error-message" data-testid="market-error" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #fca5a5', borderRadius: '16px', padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ color: '#dc2626' }}>⚠️ {error}</span>
+            <button onClick={() => { setError(null); }} className="vibrant-btn" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }} data-testid="market-retry-btn">Retry</button>
+          </div>
+        )}
 
+        {/* Loading State */}
+        {loading && (
+          <div data-testid="market-loading" style={{ textAlign: 'center', padding: '3rem' }}>
+            <div style={{ fontSize: '2rem', marginBottom: '1rem', animation: 'pulse 1.5s infinite' }}>📊</div>
+            <p style={{ color: '#64748b', fontWeight: 600 }}>Analyzing market trends...</p>
+          </div>
+        )}
+
+        {/* Empty State (after submit, no data) */}
+        {!loading && !data && !error && crop && (
+          <div data-testid="market-empty" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+            <p>Enter a crop name and click "Fetch Market Advice" to see insights.</p>
+          </div>
+        )}
+
+        {/* Results */}
         {data && !loading && (
-          <div className="result-card" style={{ background: '#f0fdf4', borderRadius: '24px', padding: '2rem', border: '1px solid #bbf7d0' }}>
+          <div className="result-card" data-testid="market-results" style={{ background: '#f0fdf4', borderRadius: '24px', padding: '2rem', border: '1px solid #bbf7d0' }}>
             <div className="result-header" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ background: 'white', padding: '0.75rem', borderRadius: '12px', fontSize: '1.5rem', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>🌾</div>
               <div>

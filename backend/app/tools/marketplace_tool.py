@@ -44,14 +44,27 @@ class DealerSearchTool(BaseTool):
                     return f"Found nearby dealers for {input_type}:\n" + "\n".join(formatted)
                 return f"Failed to search: API returned {response.status_code}"
         except Exception as e:
-            return f"Mock Dealer Search: Found 'Rahman Krishi Bitan' 2km away for {input_type}."
+            return f"Error searching for dealers: {str(e)}"
 
-class ProductVerificationTool(BaseTool):
+class BarcodeVerificationTool(BaseTool):
     name: str = "Verify Product Barcode"
-    description: str = "Verify a product's authenticity by its barcode or QR code text."
-    
-    def _run(self, barcode: str, farmer_id: str = "farmer_123") -> str:
+    description: str = "Verify a product's authenticity by its barcode or QR code image. Pass the image_path."
+
+    def _run(self, image_path: str, farmer_id: str = "farmer_123") -> str:
+        if not os.path.exists(image_path):
+            return f"Error: Image file not found at {image_path}"
+
         try:
+            import base64
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+            from app.services.barcode_service import decode_barcode_base64
+            barcode = decode_barcode_base64(encoded_string)
+
+            if not barcode:
+                return "No barcode or QR code could be detected in the image. Please try a clearer, better-lit photo."
+
             with httpx.Client() as client:
                 payload = {
                     "farmer_id_hashed": farmer_id,
@@ -62,41 +75,49 @@ class ProductVerificationTool(BaseTool):
                     data = response.json()
                     status = data.get("verification_status", "unknown")
                     if status == "verified":
-                        return f"STATUS GREEN: Product {data.get('product_name', '')} is verified and authentic."
+                        return f"STATUS GREEN: Product {data.get('product_name', '')} (Barcode: {barcode}) is verified and authentic."
                     elif status == "suspicious":
-                        return "STATUS YELLOW: Product not found in the verified database. Use caution."
+                        return f"STATUS YELLOW: Barcode {barcode} not found in the verified database. Use caution."
                     else:
-                        return "STATUS RED: Counterfeit warning. Do not purchase."
+                        return f"STATUS RED: Counterfeit warning for barcode {barcode}. Do not purchase."
                 return f"Failed to verify: API returned {response.status_code}"
         except Exception as e:
-            return f"STATUS GREEN: Mock Verification - Product {barcode} is authentic."
+            return f"Error verifying barcode: {str(e)}"
+
+class ProductVerificationTool(BaseTool):
+    name: str = "Verify Product by Barcode Text"
+    description: str = "Verify a product's authenticity using a known barcode string."
+
 
 class LabelScannerTool(BaseTool):
     name: str = "Scan Label with OCR"
-    description: str = "Extract text from an image of a pesticide or fertilizer label to find active ingredients."
-    
+    description: str = "Extract text from an image of a pesticide or fertilizer label to find active ingredients. Pass the image_path."
+
     def _run(self, image_path: str) -> str:
-        if not CV2_AVAILABLE or not os.path.exists(image_path):
-            return "Mock OCR result: Active ingredient is 'Imidacloprid 17.8% SL'. Safe for use."
-        
+        if not os.path.exists(image_path):
+            return f"Error: Image file not found at {image_path}"
+
         try:
-            # Basic OCR Pipeline
-            img = cv2.imread(image_path)
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # Thresholding to improve text reading
-            thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-            text = pytesseract.image_to_string(thresh)
-            
-            # Simple keyword matching
-            text_lower = text.lower()
-            if "imidacloprid" in text_lower:
-                return f"OCR Found: Imidacloprid. Extracted text: {text[:100]}..."
-            elif "npk" in text_lower or "nitrogen" in text_lower:
-                return f"OCR Found: Fertilizer components. Extracted text: {text[:100]}..."
-                
-            return f"Raw OCR Text Extracted: {text[:200]}..."
+            # Read image as base64 to use the service's existing interface
+            import base64
+            with open(image_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+
+            from app.services.ocr_service import extract_text_from_base64, parse_label_text
+            raw_text = extract_text_from_base64(encoded_string)
+            parsed = parse_label_text(raw_text)
+
+            return (
+                f"OCR Analysis Results:\n"
+                f"- Product: {parsed['product_name']}\n"
+                f"- Active Ingredient: {parsed['active_ingredient']}\n"
+                f"- NPK Ratio: {parsed['npk_ratio']}\n"
+                f"- Expiry: {parsed['expiry']}\n"
+                f"- Dosage: {parsed['dose']}\n"
+                f"- Raw Text Snippet: {raw_text[:200]}..."
+            )
         except Exception as e:
-            return f"Mock OCR fallback due to error: {str(e)}"
+            return f"OCR Error: {str(e)}. Please try a clearer photo of the label."
 class ArbitrageAlertTool(BaseTool):
     name: str = "Price Arbitrage Scanner"
     description: str = "Compare crop prices across neighboring districts to identify transport-profitable opportunities."

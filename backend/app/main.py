@@ -1,18 +1,19 @@
-from fastapi import FastAPI, File, UploadFile, Form, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, Form, Depends, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
+import uuid
 from dotenv import load_dotenv
 
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
 
-from app.core.dependencies import orchestrator
 from app.api.utils import save_audio_local, save_image_local
 from app.services.audio import stt_node
 from app.api import routes as api_routes
+from app.api.endpoints import auth as auth_routes
 from app.api.endpoints import market as market_routes
 from app.api.endpoints import diary as diary_routes
 from app.api.endpoints import alerts as alerts_routes
@@ -22,12 +23,58 @@ from app.api.endpoints import finance as finance_routes
 from app.api.endpoints import community as community_routes
 from app.api.endpoints import marketplace as marketplace_routes
 from app.api.endpoints import emergency as emergency_routes
+from app.api.endpoints import recommendations as recommendations_routes
+from app.api.endpoints import tasks as tasks_routes
+from app.api.endpoints import planner as planner_routes
+from app.api.endpoints import traceability as traceability_routes
+from app.api.endpoints import sustainability as sustainability_routes
+from app.services.task_worker import task_worker_loop
+from app.services.memory import MemoryService
 from app.api.endpoints import memory as memory_routes
 from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
 import app.models  # Register all ORM models before startup actions
 
+from app.core.logging import get_logger
+from app.core.exceptions import KrishiBondhuException, KrishiBondhuClientException, KrishiBondhuServerException
+import structlog
+
+logger = get_logger("main")
+
 app = FastAPI(title="KrishiBondhu API")
+
+# --- Global Error Handling ---
+
+@app.exception_handler(KrishiBondhuException)
+async def krishi_bondhu_exception_handler(request: Request, exc: KrishiBondhuException):
+    status_code = 400 if isinstance(exc, KrishiBondhuClientException) else 500
+    if isinstance(exc, KrishiBondhuServerException):
+        logger.exception("Server error occurred", code=exc.code, detail=exc.detail)
+    else:
+        logger.info("Client error occurred", code=exc.code, detail=exc.detail)
+
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": exc.message, "detail": exc.detail, "code": exc.code}
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception caught by global handler", exc=str(exc))
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal Server Error", "detail": "An unexpected error occurred. Please try again later.", "code": "INTERNAL_SERVER_ERROR"}
+    )
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    structlog.contextvars.bind_contextvars(request_id=request_id)
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        structlog.contextvars.clear_contextvars()
 
 # Helper to get/create user
 from sqlalchemy import select, desc
@@ -43,13 +90,13 @@ async def get_current_user_db_id(external_id: str, db: AsyncSession) -> int:
             await db.refresh(user)
         return user.id
     except Exception as e:
-         print(f"[ERROR] Could not get/create user: {e}")
+         logger.error("Could not get/create user", error=str(e), external_id=external_id)
          return None
 
 async def save_conversation_to_db(
-    db: AsyncSession, 
-    user_db_id: int, 
-    transcript: str, 
+    db: AsyncSession,
+    user_db_id: int,
+    transcript: str,
     reply_text: str,
     metadata: dict = None,
     tts_path: str = None,
@@ -58,7 +105,7 @@ async def save_conversation_to_db(
     try:
         if not user_db_id:
             return
-        
+
         conv = Conversation(
             user_id=user_db_id,
             transcript=transcript,
@@ -69,11 +116,10 @@ async def save_conversation_to_db(
         db.add(conv)
         await db.commit()
         print(f"[DEBUG] Saved conversation for user_id {user_db_id}")
-        
-        # NEW: Broadcast event to refresh history in frontend
+
         await ws_manager.broadcast({"type": "history_updated", "user_id": user_db_id})
     except Exception as e:
-        print(f"[ERROR] Failed to save conversation: {e}")
+        logger.error("Failed to save conversation", error=str(e), user_id=user_db_id)
 
 app.add_middleware(
     CORSMiddleware,
@@ -85,15 +131,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def create_database_tables():
-    if "sqlite" in DATABASE_URL:
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            print("[INFO] SQLite fallback database tables created or already exist.")
-        except Exception as e:
-            print(f"[ERROR] Failed to create SQLite tables: {e}")
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            if "postgresql" in DATABASE_URL.lower():
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+                print("[INFO] PostGIS and pgvector extensions ensured.")
+
+            await conn.run_sync(Base.metadata.create_all)
+            print("[INFO] Database tables created or already exist.")
+    except Exception as e:
+        print(f"[ERROR] Database initialization failed: {e}")
 
 app.include_router(api_routes.router, prefix="/api")
+app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])
 app.include_router(market_routes.router, prefix="/api/market", tags=["market"])
 app.include_router(diary_routes.router, prefix="/api/diary", tags=["diary"])
 app.include_router(alerts_routes.router, prefix="/api/alerts", tags=["alerts"])
@@ -104,6 +156,11 @@ app.include_router(memory_routes.router, prefix="/api/memory", tags=["memory"])
 app.include_router(community_routes.router, prefix="/api/community", tags=["community"])
 app.include_router(marketplace_routes.router, prefix="/api/marketplace", tags=["marketplace"])
 app.include_router(emergency_routes.router, prefix="/api/emergency", tags=["emergency"])
+app.include_router(recommendations_routes.router, prefix="/api/recommendations", tags=["recommendations"])
+app.include_router(tasks_routes.router, prefix="/api/tasks", tags=["tasks"])
+app.include_router(planner_routes.router, prefix="/api/planner", tags=["planner"])
+app.include_router(traceability_routes.router, prefix="/api/traceability", tags=["traceability"])
+app.include_router(sustainability_routes.router, prefix="/api/sustainability", tags=["sustainability"])
 
 # --- APScheduler Setup ---
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -114,13 +171,13 @@ async def daily_notification_job():
     """
     Morning job to generate irrigation and pest alerts for all active users.
     """
-    print("[SCHEDULER] Running daily irrigation and pest risk notification job...")
+    logger.info("Running daily irrigation and pest risk notification job...")
     async with AsyncSessionLocal() as db:
         try:
             # 1. Fetch all users
             result = await db.execute(select(User))
             users = result.scalars().all()
-            
+
             for user in users:
                 # 2. Get last known location for the user from conversations
                 conv_result = await db.execute(
@@ -130,49 +187,44 @@ async def daily_notification_job():
                     .limit(1)
                 )
                 last_conv = conv_result.scalars().first()
-                
+
                 gps = {"lat": 23.8103, "lon": 90.4125} # Default to Dhaka
                 if last_conv and last_conv.meta_data and last_conv.meta_data.get("gps"):
                     gps = last_conv.meta_data.get("gps")
-                
-                # 3. Invoke Agent for Irrigation Advice (Silent mode, just log to DB)
-                # Note: In a real system we would use a more efficient batch process
-                initial_state = {
-                    "transcript": "Morning irrigation check.",
-                    "gps": gps,
-                    "user_id": user.external_id
-                }
-                
-                # Trigger the orchestrator for 'water' intent
-                # result = await orchestrator.ainvoke(initial_state)
-                # advice = result.get("reply_text")
-                
-                # For the mock/prototype, we log a standard morning message
-                advice = "আপনার এলাকার মাটির আর্দ্রতা বর্তমানে মাঝারি। আজ সকালে ২০ মি.মি. সেচ দেওয়া ভালো।"
-                
+
+                # 3. We've moved to the Service Layer. We now use the AlertService here.
+                from app.services.alert_service import AlertService
+                alert_svc = AlertService()
+                risk_data = await alert_svc.calculate_pest_risk(crop="rice", lat=gps["lat"], lon=gps["lon"])
+
+                advice = f"Daily Pest Alert: {risk_data['risk_level']} risk. {risk_data['alerts'][0]}"
+
                 new_log = IrrigationLog(
                     user_id=user.external_id,
                     soil_moisture_index=0.42,
                     advice=advice
                 )
                 db.add(new_log)
-                
+
             await db.commit()
-            print(f"[SCHEDULER] Successfully processed {len(users)} users.")
+            logger.info(f"Successfully processed users: {len(users)}")
         except Exception as e:
-            print(f"[SCHEDULER ERROR] {e}")
+            logger.error(f"Scheduler error: {e}")
 
 @app.on_event("startup")
 async def start_scheduler():
-    # Run irrigation advice job at 6:00 AM daily
     scheduler.add_job(daily_notification_job, 'cron', hour=6, minute=0)
     scheduler.start()
-    print("[SCHEDULER] Started.")
+    logger.info("Scheduler started")
+
+    import asyncio
+    asyncio.create_task(task_worker_loop())
+    logger.info("Async task worker started")
 
 @app.on_event("shutdown")
 async def stop_scheduler():
     scheduler.shutdown()
-    print("[SCHEDULER] Stopped.")
+    logger.info("Scheduler stopped")
 
 # --- WebSocket Setup for Agent Status ---
 from typing import List
@@ -199,38 +251,32 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         while True:
-            # Keep connection open and wait for messages (e.g., ping)
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
-# ----------------------------------------
 
 @app.post('/api/upload_audio')
 async def upload_audio(
-    file: UploadFile = File(...), 
-    user_id: str = Form(...), 
-    lat: float = Form(None), 
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    lat: float = Form(None),
     lon: float = Form(None),
     image: UploadFile = File(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Save uploaded audio file (and optional image), invoke the LangGraph flow, and return the resulting state.
-    """
     audio_path = await save_audio_local(file)
     image_path = None
     if image:
         image_path = await save_image_local(image)
-    
+
     initial_state = {
         "audio_path": audio_path,
-        "user_id": user_id,
+        "user_id": current_user.external_id,
         "gps": {"lat": lat, "lon": lon},
         "image_path": image_path,
         "messages": []
     }
 
-    # Transcribe first and reject unclear audio before generating advice
     stt_result = stt_node(initial_state)
     transcript = stt_result.get("transcript", "").strip()
     language = stt_result.get("language", "en")
@@ -251,333 +297,220 @@ async def upload_audio(
     initial_state["language"] = language
 
     try:
-        # Pass the websocket broadcast as the status callback to stream agent thoughts
-        result = await orchestrator.ainvoke(
-            initial_state, 
-            status_callback=ws_manager.broadcast,
-            db=db
-        )
-        # Ensure we always have a reply_text
-        if not result.get("reply_text"):
-             result["reply_text"] = "I processed your audio but couldn't generate a response. Please try again."
+        # Use the new Crew-based logic
+        from app.crews.krishi_crew import KrishiCrew
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew()
 
-        # SAVE TO DB
-        user_db_id = await get_current_user_db_id(user_id, db)
+        from crewai import Task
+        from app.agents.bengali_interpreter import bengali_interpreter
+
+        route_task = Task(
+            description=f"Interpret the user's intent: {transcript}. Route to the best expert agent.",
+            expected_output="A JSON object specifying the intent and a preliminary response.",
+            agent=bengali_interpreter
+        )
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[route_task])
+        reply_text = str(result)
+
+        user_db_id = current_user.id
         await save_conversation_to_db(
-            db, 
-            user_db_id, 
-            result.get("transcript", ""), 
-            result.get("reply_text", ""), 
-            metadata={
-                "crop": result.get("crop"),
-                "vision_result": result.get("vision_result"),
-                "weather_forecast": result.get("weather_forecast"),
-                "language": result.get("language"),
-                "stt_source": result.get("stt_source"),
-                "gps": result.get("gps")
-            },
-            tts_path=result.get("tts_path"),
+            db,
+            user_db_id,
+            transcript,
+            reply_text,
+            metadata={"gps": initial_state["gps"]},
+            tts_path=None,
             media_url=image_path
         )
 
-        # Clean up non-serializable objects for JSON response
-        clean_result = {
-            "transcript": result.get("transcript", ""),
-            "reply_text": result.get("reply_text", ""),
-            "crop": result.get("crop"),
-            "language": result.get("language"),
-            "stt_source": result.get("stt_source"),
-            "stt_source_reason": result.get("stt_source_reason"),
-            "vision_result": result.get("vision_result"),
-            "weather_forecast": result.get("weather_forecast"),
-            "tts_path": result.get("tts_path"),
-            "user_id": result.get("user_id", user_id),
-            "gps": result.get("gps", {"lat": lat, "lon": lon})
-        }
-        return JSONResponse(clean_result)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        # Return a helpful error response instead of crashing
+        await MemoryService.extract_and_save_facts(
+            db,
+            current_user.external_id,
+            transcript,
+            conv_id=user_db_id
+        )
+
         return JSONResponse({
-            "error": str(e),
-            "reply_text": "I apologize, but I'm experiencing technical difficulties processing your audio. Please try again in a moment.",
-            "user_id": user_id
-        }, status_code=500)
+            "transcript": transcript,
+            "reply_text": reply_text,
+            "user_id": current_user.external_id,
+            "gps": initial_state["gps"]
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post('/api/upload_image')
 async def upload_image(
     image: UploadFile = File(...),
-    user_id: str = Form(...),
+    current_user: User = Depends(get_current_user),
     lat: float = Form(None),
     lon: float = Form(None),
     question: str = Form(""),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Upload image for analysis. Can include optional text question.
-    """
-    # Import language detection function
     from app.services.audio import detect_language_from_text
-    
     image_path = await save_image_local(image)
-    
-    # CRITICAL: Detect language from question if provided
-    detected_language = "en"
-    if question:
-        detected_language = detect_language_from_text(question)
-        print(f"[DEBUG] /api/upload_image: Question language detected: {detected_language}")
-    
+    detected_language = detect_language_from_text(question) if question else "en"
+
     initial_state = {
-        "audio_path": None,
-        "user_id": user_id,
+        "user_id": current_user.external_id,
         "gps": {"lat": lat, "lon": lon},
         "image_path": image_path,
-        "transcript": question,  # Use question as transcript if provided
-        "language": detected_language,  # SET LANGUAGE HERE!
-        "messages": []
+        "transcript": question,
+        "language": detected_language,
     }
     try:
-        # Skip STT if no audio, go directly to intent/vision
-        # We'll modify the flow to handle image-only queries
-        result = await orchestrator.ainvoke(initial_state, db=db)
-        # Ensure we always have a reply_text
-        # Ensure we always have a reply_text
-        if not result.get("reply_text"):
-             result["reply_text"] = "I analyzed your image but couldn't generate a detailed response. Please try again."
+        from app.crews.krishi_crew import KrishiCrew
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew()
 
-        # SAVE TO DB
-        user_db_id = await get_current_user_db_id(user_id, db)
+        from crewai import Task
+        from app.agents.disease_analyst import disease_analyst
+
+        vision_task = Task(
+            description=f"Analyze the soil/crop image at {image_path} and answer: {question}",
+            expected_output="A technical diagnostic report with treatment recommendations.",
+            agent=disease_analyst
+        )
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[vision_task])
+        reply_text = str(result)
+
+        user_db_id = current_user.id
         await save_conversation_to_db(
-            db, 
-            user_db_id, 
-            result.get("transcript", question), 
-            result.get("reply_text", ""), 
-            metadata={
-                "crop": result.get("crop"),
-                "vision_result": result.get("vision_result"),
-                "weather_forecast": result.get("weather_forecast"),
-                "language": result.get("language"),
-                "gps": result.get("gps")
-            },
-            tts_path=result.get("tts_path"),
+            db,
+            user_db_id,
+            question,
+            reply_text,
+            metadata={"gps": initial_state["gps"]},
             media_url=image_path
         )
-        
-        # Clean up non-serializable objects for JSON response
-        clean_result = {
-            "transcript": result.get("transcript", question),
-            "reply_text": result.get("reply_text", ""),
-            "crop": result.get("crop"),
-            "language": result.get("language"),
-            "vision_result": result.get("vision_result"),
-            "weather_forecast": result.get("weather_forecast"),
-            "tts_path": result.get("tts_path"),
-            "user_id": result.get("user_id", user_id),
-            "gps": result.get("gps", {"lat": lat, "lon": lon})
-        }
-        return JSONResponse(clean_result)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        # Return a helpful error response instead of crashing
+
+        await MemoryService.extract_and_save_facts(
+            db,
+            current_user.external_id,
+            question,
+            conv_id=user_db_id
+        )
+
         return JSONResponse({
-            "error": str(e),
-            "reply_text": "I apologize, but I'm experiencing technical difficulties processing your image. Please try again in a moment.",
             "transcript": question,
-            "user_id": user_id
-        }, status_code=500)
+            "reply_text": reply_text,
+            "user_id": current_user.external_id,
+            "gps": initial_state["gps"]
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post('/api/chat')
 async def chat(
     message: str = Form(...),
-    user_id: str = Form(...),
+    current_user: User = Depends(get_current_user),
     lat: float = Form(None),
     lon: float = Form(None),
     image: UploadFile = File(None),
-    include_history: bool = Form(True),  # NEW: Option to include chat history
+    include_history: bool = Form(True),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Text-based chatbot endpoint. Can include optional image and chat history.
-    """
-    # Import language detection function
     from app.services.audio import detect_language_from_text
     from sqlalchemy import select, desc
     from app.models.db_models import Conversation
-    
+
     image_path = None
     if image:
         image_path = await save_image_local(image)
-    
-    # CRITICAL: Detect language from message BEFORE passing to workflow
+
     detected_language = detect_language_from_text(message)
-    print(f"[DEBUG] /api/chat: Message language detected: {detected_language}")
-    
-    # NEW: Load chat history for context (last 5 conversations)
+
     messages = [{"role": "user", "content": message}]
     if include_history and db:
-        try:
-            # Query previous conversations for this user
-            # First get internal numeric ID
-            user_db_id = await get_current_user_db_id(user_id, db)
-            
-            if user_db_id:
-                result = await db.execute(
-                    select(Conversation)
-                    .where(Conversation.user_id == user_db_id)
-                    .order_by(desc(Conversation.created_at))
-                    .limit(5)  # Get last 5 conversations
-                )
-                previous_convs = result.scalars().all()
-            
-            # Reverse to get chronological order (oldest to newest)
-            previous_convs = list(reversed(previous_convs))
-            
-            # Add to messages in conversational format
+        user_db_id = current_user.id
+        if user_db_id:
+            result = await db.execute(
+                select(Conversation)
+                .where(Conversation.user_id == user_db_id)
+                .order_by(desc(Conversation.created_at))
+                .limit(5)
+            )
+            previous_convs = list(reversed(result.scalars().all()))
             for conv in previous_convs:
-                if conv.transcript:
-                    messages.insert(0, {"role": "user", "content": conv.transcript})
+                if conv.transcript: messages.insert(0, {"role": "user", "content": conv.transcript})
                 if conv.meta_data and conv.meta_data.get("reply_text"):
                     messages.insert(1, {"role": "assistant", "content": conv.meta_data.get("reply_text", "")})
-            
-            print(f"[DEBUG] /api/chat: Loaded {len(previous_convs)} previous conversations for user {user_id}")
-        except Exception as e:
-            print(f"[DEBUG] /api/chat: Could not load history: {e}")
-            # Continue without history if database fails
-            pass
-    
+
     initial_state = {
-        "audio_path": None,
-        "user_id": user_id,
+        "user_id": current_user.external_id,
         "gps": {"lat": lat, "lon": lon},
         "image_path": image_path,
-        "transcript": message,  # Use message as transcript
-        "language": detected_language,  # SET LANGUAGE HERE!
-        "messages": messages  # Now includes history if available
+        "transcript": message,
+        "language": detected_language,
+        "messages": messages
     }
     try:
-        # For text-only chat, skip STT and go to reasoning
-        result = await orchestrator.ainvoke(initial_state, db=db)
-        # Ensure we always have a reply_text
-        # Ensure we always have a reply_text
-        if not result.get("reply_text"):
-            result["reply_text"] = "I received your message but couldn't generate a response. Please try again."
-        
-        # SAVE TO DB
-        user_db_id = await get_current_user_db_id(user_id, db)
+        from app.crews.krishi_crew import KrishiCrew
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew()
+
+        from crewai import Task
+        from app.agents.bengali_interpreter import bengali_interpreter
+
+        route_task = Task(
+            description=f"Interpret the user's intent from this message: {message}. Route to the most la- la la la appropriate expert agent.",
+            expected_output="A JSON object with the intent and a a-dedicated response.",
+            agent=bengali_interpreter
+        )
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[route_task])
+        reply_text = str(result)
+
+        user_db_id = current_user.id
         await save_conversation_to_db(
-            db, 
-            user_db_id, 
-            result.get("transcript", ""), 
-            result.get("reply_text", ""), 
-            metadata={
-                "crop": result.get("crop"),
-                "vision_result": result.get("vision_result"),
-                "weather_forecast": result.get("weather_forecast"),
-                "language": result.get("language"),
-                "gps": result.get("gps")
-            },
-            tts_path=result.get("tts_path"),
+            db,
+            user_db_id,
+            message,
+            reply_text,
+            metadata={"gps": initial_state["gps"]},
             media_url=image_path
         )
 
-        # Clean up non-serializable objects for JSON response
-        clean_result = {
-            "transcript": result.get("transcript", ""),
-            "reply_text": result.get("reply_text", ""),
-            "crop": result.get("crop"),
-            "language": result.get("language"),
-            "vision_result": result.get("vision_result"),
-            "weather_forecast": result.get("weather_forecast"),
-            "tts_path": result.get("tts_path"),
-            "user_id": result.get("user_id", user_id),
-            "gps": result.get("gps", {"lat": lat, "lon": lon})
-        }
-        return JSONResponse(clean_result)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        # Return a helpful error response instead of crashing
-        error_msg = str(e)
-        return JSONResponse({
-            "error": error_msg,
-            "reply_text": "I apologize, but I'm experiencing technical difficulties. Please try again in a moment.",
-            "transcript": message,
-            "user_id": user_id
-        }, status_code=500)
+        await MemoryService.extract_and_save_facts(
+            db,
+            current_user.external_id,
+            message,
+            conv_id=user_db_id
+        )
 
+        return JSONResponse({
+            "transcript": message,
+            "reply_text": reply_text,
+            "user_id": current_user.external_id,
+            "gps": initial_state["gps"]
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get('/api/get_tts')
 async def get_tts(path: str):
-    """
-    Return a generated tts mp3 by local path.
-    The path is URL-encoded in the query parameter, so we need to decode it.
-    Supports both old /tmp/ location and new UPLOAD_DIR location for backward compatibility.
-    Silently handles old temp files that no longer exist.
-    """
     from urllib.parse import unquote
     from app.api.utils import UPLOAD_DIR
     import re
     from fastapi import Response
-    
-    # URL decode the path parameter
     decoded_path = unquote(path)
     filename = os.path.basename(decoded_path)
-    
-    print(f"[DEBUG] get_tts requested: {decoded_path}")
-    print(f"[DEBUG] get_tts UPLOAD_DIR: {UPLOAD_DIR}")
-    
-    # Check if this is an old temporary file pattern (from before the fix)
-    # Pattern: tmp followed by alphanumeric characters and underscores, ending with .mp3
-    # Python's tempfile can generate names like tmpXXXXXX or tmpXXXX_XX
-    is_old_temp_file = (
-        re.match(r'^tmp[a-z0-9_]+\.mp3$', filename, re.IGNORECASE) and 
-        decoded_path.startswith('/tmp/') and 
-        not decoded_path.startswith('/tmp/uploads/')
-    )
-    
-    # Check if file exists at the requested path
     if os.path.exists(decoded_path):
-        file_size = os.path.getsize(decoded_path)
-        print(f"[DEBUG] get_tts: Serving file from requested path: {decoded_path} (size: {file_size} bytes)")
         return FileResponse(decoded_path, media_type='audio/mpeg', filename=filename)
-    
-    # If file not found, try to find it in UPLOAD_DIR (for backward compatibility)
     upload_dir_path = os.path.join(UPLOAD_DIR, filename)
-    
     if os.path.exists(upload_dir_path):
-        file_size = os.path.getsize(upload_dir_path)
-        print(f"[DEBUG] get_tts: Serving file from UPLOAD_DIR: {upload_dir_path} (size: {file_size} bytes)")
         return FileResponse(upload_dir_path, media_type='audio/mpeg', filename=filename)
-    
-    # File not found - handle old temp files silently (they're expected to be missing)
-    if is_old_temp_file:
-        # Return 204 No Content instead of 404 to avoid uvicorn logging "404 Not Found"
-        # This is a silent response that won't clutter the logs
-        print(f"[DEBUG] get_tts: Old temp file, returning 204: {decoded_path}")
-        return Response(status_code=204)
-    
-    # New file that should exist but doesn't - return 204 silently for old database records
-    # This handles the case where database contains old TTS paths from previous test runs
-    print(f"[WARN] get_tts: TTS file not found (likely old database record): {decoded_path}")
-    
-    # Return 204 No Content instead of 404 to avoid logging noise
-    # The frontend will gracefully handle missing audio without breaking
     return Response(status_code=204)
-
-# Serve frontend static files after API routes so POST /api/* requests are handled by the API
-if os.path.exists("static"):
-    app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 @app.get("/{full_path:path}")
 async def serve_spa(full_path: str):
-    # StaticFiles with html=True handles the root, but for SPA routing
-    # we want to return index.html for unknown paths (except /api)
     if full_path.startswith("api"):
-         return JSONResponse({"detail": "Not Found"}, status_code=404)
-
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
     index_path = os.path.join("static", "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return JSONResponse({"detail": "Frontend not built"}, status_code=404)
+    return JSONResponse(status_code=404, detail="Frontend not built")

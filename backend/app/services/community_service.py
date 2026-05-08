@@ -171,7 +171,7 @@ async def escalate_question(
     lon: float,
     automatic: bool = True,
 ) -> EscalationQueue:
-    experts = await find_nearest_experts(lat, lon, limit=1)
+    experts = await find_nearest_experts(session, lat, lon, limit=1)
     expert_id = experts[0]["id"] if experts else None
     escalation = EscalationQueue(
         question_id=question_id,

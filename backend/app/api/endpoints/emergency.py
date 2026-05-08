@@ -2,8 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+import logging
 
 from app.db import get_db
+from app.core.dependencies import get_current_user
+from app.models.db_models import InsuranceQuote, User
 from app.services.emergency_service import (
     list_insurance_providers,
     create_damage_report,
@@ -11,12 +15,12 @@ from app.services.emergency_service import (
     submit_claim,
     log_helpline_call,
 )
+from app.crews.krishi_crew import EmergencyResponseCrew
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-
 class DamageReportCreate(BaseModel):
-    farmer_id: str
     crop_type: str
     growth_stage: Optional[str] = None
     lat: float
@@ -28,13 +32,10 @@ class DamageReportCreate(BaseModel):
     voice_statement_transcribed: Optional[str] = None
     image_data: Optional[List[str]] = None
 
-
 class ClaimRequest(BaseModel):
     insurance_provider_id: Optional[str] = None
 
-
 class HelplineRequest(BaseModel):
-    farmer_id: str
     crop_type: Optional[str] = None
     damage_estimate: Optional[float] = None
     lat: Optional[float] = None
@@ -43,7 +44,6 @@ class HelplineRequest(BaseModel):
     operator_notes: Optional[str] = None
     status: str = Field(default="initiated")
 
-
 @router.get("/providers")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     try:
@@ -51,13 +51,49 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/reports")
-async def create_report(payload: DamageReportCreate, db: AsyncSession = Depends(get_db)):
+async def create_report(
+    payload: DamageReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    AI-Powered Damage Assessment.
+    Uses EmergencyResponseCrew to generate a structured official report from images and voice.
+    """
     try:
+        # 1. Use the Specialized Emergency Crew to generate the official report text
+        crew_obj = EmergencyResponseCrew()
+        crew = crew_obj.create_crew()
+
+        from crewai import Task
+        from app.agents.emergency_response import emergency_response
+
+        report_task = Task(
+            description=(
+                f"Analyze the crop damage for {payload.crop_type}. "
+                f"Cause: {payload.damage_cause}. Estimate: {payload.damage_estimate_percent}%. "
+                f"Voice testimony: {payload.voice_statement_transcribed}. "
+                "Generate a formal a damage assessment report for insurance and government relief."
+            ),
+            expected_output="A professional, structured damage assessment report including a summary of loss and specific evidence markers.",
+            agent=emergency_response
+        )
+
+        inputs = {
+            "user_id": current_user.external_id,
+            "crop": payload.crop_type,
+            "gps": {"lat": payload.lat, "lon": payload.lon},
+            "evidence": payload.image_data
+        }
+
+        # Generate the a-detailed response
+        report_text = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[report_task])
+
+        # 2. Save the structured report to the database via Service Layer
         report = await create_damage_report(
             db,
-            farmer_id=payload.farmer_id,
+            farmer_id=current_user.external_id,
             crop_type=payload.crop_type,
             growth_stage=payload.growth_stage,
             lat=payload.lat,
@@ -66,13 +102,13 @@ async def create_report(payload: DamageReportCreate, db: AsyncSession = Depends(
             damage_estimate_percent=payload.damage_estimate_percent,
             yield_loss_estimate_percent=payload.yield_loss_estimate_percent,
             insurance_provider_id=payload.insurance_provider_id,
-            voice_statement_transcribed=payload.voice_statement_transcribed,
+            voice_statement_transcribed=f"AI Analysis: {str(report_text)}\nOriginal: {payload.voice_statement_transcribed}",
             image_data=payload.image_data,
         )
-        return {"id": str(report.id), "status": report.status}
+        return {"id": str(report.id), "status": report.status, "ai_report": str(report_text)}
     except Exception as e:
+        logger.error(f"Emergency report generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/reports/{report_id}")
 async def retrieve_report(report_id: str, db: AsyncSession = Depends(get_db)):
@@ -80,7 +116,6 @@ async def retrieve_report(report_id: str, db: AsyncSession = Depends(get_db)):
     if not report:
         raise HTTPException(status_code=404, detail="Damage report not found")
     return report
-
 
 @router.post("/reports/{report_id}/claim")
 async def claim_report(report_id: str, payload: ClaimRequest, db: AsyncSession = Depends(get_db)):
@@ -91,13 +126,16 @@ async def claim_report(report_id: str, payload: ClaimRequest, db: AsyncSession =
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/helpline")
-async def log_call(payload: HelplineRequest, db: AsyncSession = Depends(get_db)):
+async def log_call(
+    payload: HelplineRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     try:
         log = await log_helpline_call(
             db,
-            farmer_id=payload.farmer_id,
+            farmer_id=current_user.external_id,
             crop_type=payload.crop_type,
             damage_estimate=payload.damage_estimate,
             lat=payload.lat,

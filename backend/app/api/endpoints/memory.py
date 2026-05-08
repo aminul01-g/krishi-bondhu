@@ -5,6 +5,8 @@ from app.db import get_db
 from app.services.memory import MemoryService
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+from app.models.db_models import User
+from app.core.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -16,11 +18,15 @@ class MemoryFact(BaseModel):
     last_updated: str
 
 @router.get("/{user_id}", response_model=Dict[str, List[Dict]])
-async def get_farm_memory(user_id: str, db: AsyncSession = Depends(get_db)):
+async def get_farm_memory(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """
     Retrieve all stored facts and history for a specific farm/user.
     """
     try:
+        user_id = current_user.external_id
         history = await MemoryService.get_farm_history(db, user_id)
         # We also want to return structured facts
         from app.models.db_models import KnowledgeFact
@@ -72,14 +78,19 @@ async def get_farm_memory(user_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{user_id}/{fact_key}")
-async def delete_memory_fact(user_id: str, fact_key: str, db: AsyncSession = Depends(get_db)):
+async def delete_memory_fact(
+    current_user: User = Depends(get_current_user),
+    fact_key: str,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Delete a specific fact from the farm memory.
     """
     from app.models.db_models import KnowledgeFact
     from sqlalchemy import delete
-    
+
     try:
+        user_id = current_user.external_id
         await db.execute(
             delete(KnowledgeFact).where(
                 KnowledgeFact.user_id == user_id,

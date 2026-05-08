@@ -15,30 +15,10 @@ class CropDamageAssessmentTool(BaseTool):
     description: str = "Analyze an image of a crop to estimate the percentage of damage using rule-based vegetation indices. Requires image_path and crop_type."
 
     def _run(self, image_path: str = "none", crop_type: str = "general", **kwargs) -> str:
-        if not CV2_AVAILABLE or not os.path.exists(image_path):
-            return f"Mock Damage Assessment: Estimated 65% damage for {crop_type} due to flooding."
-        
-        try:
-            # Very basic rule-based damage proxy (ExG index approximation)
-            img = cv2.imread(image_path)
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-            
-            # Define range for healthy green
-            lower_green = np.array([35, 40, 40])
-            upper_green = np.array([85, 255, 255])
-            mask = cv2.inRange(hsv, lower_green, upper_green)
-            
-            # Calculate non-green percentage as a rough damage proxy
-            total_pixels = img.shape[0] * img.shape[1]
-            green_pixels = cv2.countNonZero(mask)
-            damage_percent = 100 - ((green_pixels / total_pixels) * 100)
-            
-            # Floor/Ceil realistic ranges
-            damage_percent = min(max(damage_percent, 5.0), 95.0)
-            
-            return f"Calculated Image Damage Assessment: {damage_percent:.1f}% estimated visual damage for {crop_type}."
-        except Exception as e:
-            return f"Mock Damage Assessment (CV2 Error): Estimated 65% damage for {crop_type}."
+        from app.services.vision_service import VisionService
+
+        svc = VisionService()
+        return svc.assess_damage(image_path, crop_type)
 
 class DamageReportGeneratorTool(BaseTool):
     name: str = "Generate Damage Report"

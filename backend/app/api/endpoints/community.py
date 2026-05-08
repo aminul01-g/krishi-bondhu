@@ -2,8 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 
 from app.db import get_db
+from app.models.db_models import User
+from app.core.dependencies import get_current_user
 from app.services.community_service import (
     create_community_question,
     get_recent_questions,
@@ -13,19 +16,19 @@ from app.services.community_service import (
     upvote_answer,
     escalate_question,
 )
+from app.crews.krishi_crew import KrishiCrew
+from app.agents.community_connector import community_connector
+from crewai import Task
 
 router = APIRouter()
 
-
 class CommunityQuestionCreate(BaseModel):
-    farmer_id_hashed: str
     question_text: str
     crop_type: str
     growth_stage: Optional[str]
     lat: float
     lon: float
     photo_url: Optional[str] = None
-
 
 class CommunityAnswerCreate(BaseModel):
     answerer_id: str
@@ -34,23 +37,36 @@ class CommunityAnswerCreate(BaseModel):
     answerer_credentials: Optional[str] = None
     is_expert_answer: bool = False
 
-
 class CommunityUpvoteCreate(BaseModel):
-    farmer_id_hashed: str
     rating: Optional[int] = Field(None, ge=1, le=5)
-
 
 class EscalateRequest(BaseModel):
     lat: float
     lon: float
 
-
 @router.post("/questions")
-async def submit_question(payload: CommunityQuestionCreate, db: AsyncSession = Depends(get_db)):
+async def submit_question(
+    payload: CommunityQuestionCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     try:
+        # Use AI to enrich the question metadata before saving
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew()
+
+        enrich_task = Task(
+            description=f"Analyze this farming question: '{payload.question_text}'. Categorize it and suggest 3 relevant keywords for better community discovery.",
+            expected_output="A JSON object with 'category' and 'keywords' (list of strings).",
+            agent=community_connector
+        )
+
+        inputs = {"user_input": payload.question_text, "user_id": current_user.external_id}
+        ai_metadata = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[enrich_task])
+
         question = await create_community_question(
             db,
-            farmer_id_hashed=payload.farmer_id_hashed,
+            farmer_id_hashed=current_user.external_id,
             question_text=payload.question_text,
             crop_type=payload.crop_type,
             growth_stage=payload.growth_stage,
@@ -58,10 +74,9 @@ async def submit_question(payload: CommunityQuestionCreate, db: AsyncSession = D
             lon=payload.lon,
             photo_url=payload.photo_url,
         )
-        return {"id": str(question.id), "status": question.status}
+        return {"id": str(question.id), "status": question.status, "ai_insights": str(ai_metadata)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/questions")
 async def list_questions(
@@ -76,14 +91,12 @@ async def list_questions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.get("/questions/{question_id}")
 async def get_question(question_id: str, db: AsyncSession = Depends(get_db)):
     question = await get_question_by_id(db, question_id)
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     return question
-
 
 @router.post("/questions/{question_id}/answers")
 async def answer_question(question_id: str, payload: CommunityAnswerCreate, db: AsyncSession = Depends(get_db)):
@@ -101,22 +114,39 @@ async def answer_question(question_id: str, payload: CommunityAnswerCreate, db: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/answers/{answer_id}/upvote")
-async def upvote_answer_endpoint(answer_id: str, payload: CommunityUpvoteCreate, db: AsyncSession = Depends(get_db)):
+async def upvote_answer_endpoint(
+    answer_id: str,
+    payload: CommunityUpvoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     try:
-        upvote = await upvote_answer(db, answer_id, payload.farmer_id_hashed, payload.rating)
+        upvote = await upvote_answer(db, answer_id, current_user.external_id, payload.rating)
         return {"id": str(upvote.id), "rating": upvote.rating}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post("/questions/{question_id}/escalate")
 async def escalate_question_endpoint(question_id: str, payload: EscalateRequest, db: AsyncSession = Depends(get_db)):
     try:
+        # Use AI to summarize the case before escalating to a human expert
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew()
+
+        from crewai import Task
+        summary_task = Task(
+            description=f"Summarize the core issue for question ID {question_id} and explain why it requires urgent expert attention based on location ({payload.lat}, {payload.lon}).",
+            expected_output="A concise 2-sentence escalation summary for an agricultural extension officer.",
+            agent=community_connector
+        )
+
+        inputs = {"user_input": f"Escalate question {question_id}", "gps": {"lat": payload.lat, "lon": payload.lon}}
+        summary_text = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[summary_task])
+
         escalation = await escalate_question(db, question_id, payload.lat, payload.lon)
-        return {"escalation_id": str(escalation.id), "status": escalation.status}
+        return {"escalation_id": str(escalation.id), "status": escalation.status, "ai_summary": str(summary_text)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

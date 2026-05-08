@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE } from '../api';
 import './CommunityQA.css';
 
 export default function CommunityQA() {
