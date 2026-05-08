@@ -40,6 +40,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "redis>=5.2.1",
     "prophet>=1.1.5",
+    "structlog>=24.0.0",
     
     # Audio/Misc
     "gtts>=2.5.0",
