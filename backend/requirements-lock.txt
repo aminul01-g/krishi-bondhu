@@ -921,7 +921,7 @@ urllib3==2.6.3
     #   tritonclient
     #   types-requests
     #   yt-dlp
-structlog==24.0.0
+structlog==25.5.0
 uvicorn==0.46.0
     # via
     #   krishibondhu-backend (pyproject.toml)
