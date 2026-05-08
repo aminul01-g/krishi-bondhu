@@ -10,10 +10,10 @@ def get_llm():
     provider = os.getenv("LLM_PROVIDER", "gemini").lower()
     
     if provider == "huggingface":
-        hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
+        hf_api_key = os.getenv("HUGGINGFACEHUB_API_TOKEN") or os.getenv("HUGGINGFACE_API_KEY")
         hf_model = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.2-3B-Instruct")
         if not hf_api_key:
-            raise ValueError("HUGGINGFACE_API_KEY is not set.")
+            raise ValueError("HUGGINGFACEHUB_API_TOKEN or HUGGINGFACE_API_KEY is not set.")
         
         # We use Langchain's HuggingFaceEndpoint wrapper
         return HuggingFaceEndpoint(

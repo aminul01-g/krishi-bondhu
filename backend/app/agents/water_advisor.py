@@ -1,17 +1,8 @@
 from crewai import Agent
-from langchain_huggingface import ChatHuggingFace
-from langchain_community.llms import HuggingFaceHub
+from app.config.agent_llm import get_agent_llm
 import os
 
-def get_llm():
-    model_name = os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.2-3B-Instruct")
-    try:
-        return ChatHuggingFace(llm=HuggingFaceHub(repo_id=model_name))
-    except Exception as e:
-        print(f"Error initializing HuggingFace LLM: {e}. Falling back to generic model.")
-        return HuggingFaceHub(repo_id="microsoft/Phi-3-mini-4k-instruct")
-
-llm = get_llm()
+llm = get_agent_llm(os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.2-3B-Instruct"))
 
 water_advisor = Agent(
     role="Irrigation & Water Management Expert",
