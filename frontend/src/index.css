@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-bg text-text-primary font-sans antialiased;
+    min-height: 100dvh;
+  }
+  * {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white font-semibold py-3 px-6 rounded-btn
+           hover:bg-primary-light active:scale-[0.97] transition-all
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-danger {
+    @apply bg-danger text-white font-semibold py-3 px-6 rounded-btn
+           hover:bg-red-600 active:scale-[0.97] transition-all;
+  }
+  .btn-outline {
+    @apply border-2 border-primary text-primary font-semibold py-3 px-6 rounded-btn
+           hover:bg-primary hover:text-white active:scale-[0.97] transition-all;
+  }
+  .card {
+    @apply bg-surface rounded-card shadow-card p-4;
+  }
+  .card-elevated {
+    @apply bg-surface rounded-card shadow-elevated p-5;
+  }
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-pill text-xs font-semibold;
+  }
+  .badge-success {
+    @apply badge bg-primary/10 text-primary;
+  }
+  .badge-warning {
+    @apply badge bg-accent-light/30 text-soil;
+  }
+  .badge-danger {
+    @apply badge bg-danger-light text-danger;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 rounded-btn border border-border bg-surface
+           text-text-primary placeholder:text-text-secondary
+           focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary
+           transition-all;
+  }
+  .page-container {
+    @apply max-w-2xl mx-auto px-4 py-4 pb-24;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+
+/* Pulse animation for recording */
+@keyframes pulse-record {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+.animate-pulse-record {
+  animation: pulse-record 1.2s ease-in-out infinite;
+}
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply bg-border rounded-btn;
+  background: linear-gradient(90deg, #E5E2DB 25%, #F0EDE6 50%, #E5E2DB 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

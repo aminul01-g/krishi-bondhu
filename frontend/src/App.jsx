@@ -1,330 +1,82 @@
-import React, { useState, useEffect } from 'react'
-import Chatbot from './components/Chatbot'
-import ConversationHistory from './components/ConversationHistory'
-import MarketIntelligence from './components/MarketIntelligence'
-import FarmDiary from './components/FarmDiary'
-import DailyTips from './components/DailyTips'
-import SoilHealth from './components/SoilHealth'
-import WaterIrrigation from './components/WaterIrrigation'
-import FinanceHub from './components/FinanceHub'
-import CommunityQA from './components/CommunityQA'
-import Marketplace from './components/Marketplace'
-import EmergencySupport from './components/EmergencySupport'
-import FarmOverview from './components/FarmOverview'
-import LandingPage from './components/LandingPage'
-import { API_BASE } from './api'
-import { useAgentSocket } from './hooks/useAgentSocket'
-import { flushQueue } from './services/offlineQueue'
-import './App.css'
+import { lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AppLayout } from './components/layout/AppLayout';
+import { LoadingScreen } from './components/shared/LoadingStates';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
+
+// Lazy-loaded pages for code splitting
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const MarketPage = lazy(() => import('./pages/MarketPage'));
+const DiaryPage = lazy(() => import('./pages/DiaryPage'));
+const TipsPage = lazy(() => import('./pages/TipsPage'));
+const EmergencyPage = lazy(() => import('./pages/EmergencyPage'));
+const SoilPage = lazy(() => import('./pages/SoilPage'));
+const WaterPage = lazy(() => import('./pages/WaterPage'));
+const FinancePage = lazy(() => import('./pages/FinancePage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
+const MarketplacePage = lazy(() => import('./pages/MarketplacePage'));
+const PlannerPage = lazy(() => import('./pages/PlannerPage'));
+const TraceabilityPage = lazy(() => import('./pages/TraceabilityPage'));
+const SustainabilityPage = lazy(() => import('./pages/SustainabilityPage'));
+
+/**
+ * Protected route wrapper — redirects to onboarding if not authenticated.
+ */
+function ProtectedRoute({ children }) {
+  const { token, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!token) return <Navigate to="/onboarding" replace />;
+  return children;
+}
+
+/**
+ * Public route wrapper — redirects to app if already authenticated.
+ */
+function PublicRoute({ children }) {
+  const { token, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (token) return <Navigate to="/app/chat" replace />;
+  return children;
+}
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('krishi_auth_token'))
-  const [activeTab, setActiveTab] = useState('overview')
-  const [conversations, setConversations] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [isOffline, setIsOffline] = useState(!navigator.onLine)
-
-  const wsUrl = (() => {
-    if (API_BASE.startsWith('http')) {
-      return API_BASE.replace('http', 'ws') + '/ws/agent_status'
-    }
-    // Handle relative path (production)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
-    return `${protocol}//${host}${API_BASE}/ws/agent_status`
-  })()
-  const { status: agentStatus, isConnected } = useAgentSocket(wsUrl)
-
-  const fetchConversations = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch(`${API_BASE}/conversations?t=${Date.now()}`, {
-        cache: 'no-store'
-      })
-      if (!response.ok) throw new Error('Failed to fetch conversations')
-      const data = await response.json()
-      if (Array.isArray(data)) {
-        setConversations(data)
-        setError(null)
-      }
-    } catch (err) {
-      console.error('Error fetching conversations:', err)
-      setError('Connection issue. Retrying...')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchConversations()
-
-    const handleOnline = () => {
-      setIsOffline(false)
-      flushQueue()
-      fetchConversations()
-    }
-    const handleOffline = () => setIsOffline(true)
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  // NEW: Listen for WebSocket events to refresh history
-  useEffect(() => {
-    if (agentStatus && agentStatus.type === 'history_updated') {
-      console.log('History update signal received via WebSocket');
-      fetchConversations();
-    }
-  }, [agentStatus])
-
-  const handleNewConversation = () => {
-    // No longer need manual timeouts! 
-    // The WebSocket will broadcast 'history_updated' when the DB is ready.
-  }
-
-  const tabGroups = {
-    'Core AI Assistant': [
-      { id: 'overview', label: 'Farm Intelligence', icon: '🧠' },
-      { id: 'chat', label: 'AI Chat', icon: '💬' },
-      { id: 'market', label: 'Market Intelligence', icon: '📈' },
-      { id: 'tips', label: 'Daily Tips', icon: '💡' }
-    ],
-    'Farm Management': [
-      { id: 'diary', label: 'Farm Diary', icon: '📒' },
-      { id: 'soil', label: 'Soil Health', icon: '🌱' },
-      { id: 'water', label: 'Irrigation', icon: '💧' },
-      { id: 'finance', label: 'Finance Hub', icon: '💰' }
-    ],
-    'Community & Support': [
-      { id: 'community', label: 'Community Q&A', icon: '👥' },
-      { id: 'marketplace', label: 'Marketplace', icon: '🛒' },
-      { id: 'emergency', label: 'Emergency', icon: '🚨' }
-    ]
-  }
-
-  const [syncCount, setSyncCount] = useState(0);
-
-  // Sync tracking
-  useEffect(() => {
-    const updateSync = async () => {
-      const { getQueueCount } = await import('./services/offlineQueue');
-      const count = await getQueueCount();
-      setSyncCount(count);
-    };
-
-    updateSync();
-    window.addEventListener('offline-sync-updated', updateSync);
-    return () => window.removeEventListener('offline-sync-updated', updateSync);
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('krishi_auth_token');
-    setIsAuthenticated(false);
-  };
-
-  if (!isAuthenticated) {
-    return <LandingPage onAuthSuccess={() => setIsAuthenticated(true)} />
-  }
-
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="header-inner">
-          <div className="brand-block">
-            <div className="brand-mark">🌾</div>
-            <div className="brand-text">
-              <h1>KrishiBondhu</h1>
-              <p className="subtitle">Your intelligent farming companion for crop care, finance, soil, irrigation, and markets.</p>
-            </div>
-          </div>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
+              <Route path="/onboarding" element={<PublicRoute><OnboardingPage /></PublicRoute>} />
 
-          <div className="header-status">
-            {syncCount > 0 && (
-              <span className="sync-status-pill">
-                🔄 {isOffline ? `${syncCount} pending` : `Syncing ${syncCount}...`}
-              </span>
-            )}
-            <button 
-              className={`voice-mode-btn ${activeTab === 'chat' ? 'visible' : ''}`}
-              onClick={() => document.getElementById('voice-trigger')?.click()}
-              title="Hands-free mode"
-            >
-              🎙️
-            </button>
-            <span className={`status-pill ${isConnected ? 'online' : 'offline'}`}>
-              {isConnected ? `🟢 ${agentStatus?.message || agentStatus?.type || 'Agent ready'}` : '🔴 Reconnecting...'}
-            </span>
-            {isOffline && <span className="offline-banner">Offline mode enabled — actions will sync when you're back online.</span>}
-            <button className="logout-btn" onClick={handleLogout}>Log out</button>
-          </div>
-        </div>
-      </header>
+              {/* Protected app routes */}
+              <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route index element={<Navigate to="chat" replace />} />
+                <Route path="chat" element={<ChatPage />} />
+                <Route path="market" element={<MarketPage />} />
+                <Route path="diary" element={<DiaryPage />} />
+                <Route path="tips" element={<TipsPage />} />
+                <Route path="emergency" element={<EmergencyPage />} />
+                <Route path="soil" element={<SoilPage />} />
+                <Route path="water" element={<WaterPage />} />
+                <Route path="finance" element={<FinancePage />} />
+                <Route path="community" element={<CommunityPage />} />
+                <Route path="marketplace" element={<MarketplacePage />} />
+                <Route path="planner" element={<PlannerPage />} />
+                <Route path="traceability" element={<TraceabilityPage />} />
+                <Route path="sustainability" element={<SustainabilityPage />} />
+              </Route>
 
-      <main className="app-main">
-        <div className="container">
-          <div className="layout-grid">
-            <aside className="side-panel">
-              <div className="panel-card glassmorphism">
-                <div className="panel-title">Toolset</div>
-                <p className="panel-copy">One tap access to every KrishiBondhu capability.</p>
-                <div className="tab-groups">
-                  {Object.entries(tabGroups).map(([groupName, groupTabs]) => (
-                    <div key={groupName} className="tab-group" style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{groupName}</h4>
-                      <div className="tab-list">
-                        {groupTabs.map(tab => (
-                          <button
-                            key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-                          >
-                            <span>{tab.icon}</span>
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="panel-card glassmorphism quick-guide">
-                <h3>How to use</h3>
-                <ul>
-                  <li>📷 Capture crop images for instant diagnosis</li>
-                  <li>💬 Chat in Bengali or English</li>
-                  <li>📝 Save entries in the Farm Diary</li>
-                  <li>📈 Compare market advice before selling</li>
-                </ul>
-              </div>
-            </aside>
-
-            <section className="content-area">
-              <div className="content-card glassmorphism">
-
-
-                {activeTab === 'overview' && (
-                  <>
-                    <h2>🧠 Farm Intelligence Dashboard</h2>
-                    <p className="section-description">A high-level view of your farm's state, history, and environmental status.</p>
-                    <FarmOverview userId="user_123" />
-                  </>
-                )}
-
-                {activeTab === 'chat' && (
-                  <>
-                    <h2>💬 AI Chat Assistant</h2>
-                    <p className="section-description">Ask a farming question anytime — in Bengali or English.</p>
-                    <Chatbot onMessageComplete={handleNewConversation} />
-                  </>
-                )}
-
-                {activeTab === 'market' && (
-                  <>
-                    <h2>📈 Market Intelligence</h2>
-                    <p className="section-description">Receive crop-specific pricing and selling strategy advice.</p>
-                    <MarketIntelligence />
-                  </>
-                )}
-
-                {activeTab === 'diary' && (
-                  <>
-                    <h2>📒 Farm Diary</h2>
-                    <p className="section-description">Log expenses, income, and field notes in one place.</p>
-                    <FarmDiary />
-                  </>
-                )}
-
-                {activeTab === 'tips' && (
-                  <>
-                    <h2>💡 Daily Tips & Alerts</h2>
-                    <p className="section-description">Get weather-aware pest alerts and daily crop care guidance.</p>
-                    <DailyTips />
-                  </>
-                )}
-
-                {activeTab === 'soil' && (
-                  <>
-                    <h2>🌱 Soil Health Advisor</h2>
-                    <p className="section-description">Analyze soil needs and improve crop nutrition.</p>
-                    <SoilHealth userId="user_123" />
-                  </>
-                )}
-
-                {activeTab === 'water' && (
-                  <>
-                    <h2>💧 Irrigation Guidance</h2>
-                    <p className="section-description">Get daily water-use recommendations based on local moisture data.</p>
-                    <WaterIrrigation userId="user_123" />
-                  </>
-                )}
-
-                {activeTab === 'finance' && (
-                  <>
-                    <h2>💰 Finance Hub</h2>
-                    <p className="section-description">Explore credit, subsidies, and crop finance options.</p>
-                    <FinanceHub userId="user_123" />
-                  </>
-                )}
-
-                {activeTab === 'community' && (
-                  <>
-                    <h2>👥 Community Q&A</h2>
-                    <p className="section-description">Ask questions, share knowledge, and consult local experts.</p>
-                    <CommunityQA />
-                  </>
-                )}
-
-                {activeTab === 'marketplace' && (
-                  <>
-                    <h2>🛒 Input Marketplace</h2>
-                    <p className="section-description">Find authentic dealers and verify seeds or fertilizers.</p>
-                    <Marketplace />
-                  </>
-                )}
-
-                {activeTab === 'emergency' && (
-                  <>
-                    <h2>🚨 Emergency Response</h2>
-                    <p className="section-description">Report crop damage for insurance or contact national helplines.</p>
-                    <EmergencySupport />
-                  </>
-                )}
-              </div>
-            </section>
-
-            <aside className="history-panel">
-              <div className="panel-card glassmorphism history-card">
-                <div className="history-header">
-                  <div>
-                    <h2>Conversation History</h2>
-                    <p>Review and manage your recent interactions.</p>
-                  </div>
-                  <button className="refresh-btn" onClick={fetchConversations} disabled={loading}>
-                    {loading ? 'Refreshing…' : 'Refresh'}
-                  </button>
-                </div>
-                {error && <div className="error-message">{error}</div>}
-                <ConversationHistory
-                  conversations={conversations}
-                  loading={loading}
-                  onDelete={fetchConversations}
-                />
-              </div>
-            </aside>
-          </div>
-        </div>
-      </main>
-
-      <footer className="app-footer">
-        <p>KrishiBondhu — Intelligent agriculture for every farmer.</p>
-      </footer>
-    </div>
-  )
+              {/* Catch-all */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  );
 }

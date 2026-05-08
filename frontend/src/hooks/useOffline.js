@@ -1,55 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getQueueCount, flushQueue } from '../services/offlineQueue';
+import { useState, useEffect } from 'react';
 
 /**
- * Hook for tracking online/offline status and pending sync count.
- *
- * @returns {{ isOffline: boolean, pendingCount: number }}
- *
- * @example
- *   const { isOffline, pendingCount } = useOffline();
+ * Hook to track online/offline state.
  */
 export function useOffline() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(0);
-
-  const updatePendingCount = useCallback(async () => {
-    try {
-      const count = await getQueueCount();
-      setPendingCount(count);
-    } catch {
-      setPendingCount(0);
-    }
-  }, []);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      flushQueue();
-      updatePendingCount();
-    };
-
-    const handleOffline = () => {
-      setIsOffline(true);
-    };
-
-    const handleSyncUpdate = () => {
-      updatePendingCount();
-    };
-
-    // Initial count
-    updatePendingCount();
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('offline-sync-updated', handleSyncUpdate);
-
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('offline-sync-updated', handleSyncUpdate);
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
     };
-  }, [updatePendingCount]);
+  }, []);
 
-  return { isOffline, pendingCount };
+  return { isOffline };
 }
