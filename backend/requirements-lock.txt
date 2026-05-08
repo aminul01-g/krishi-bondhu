@@ -684,6 +684,8 @@ python-dotenv==1.0.0
     #   uvicorn
 redis==5.2.1
     # via krishibondhu-backend (pyproject.toml)
+prophet==1.1.5
+    # via krishibondhu-backend (pyproject.toml)
 python-multipart==0.0.27
     # via krishibondhu-backend (pyproject.toml)
 python-rapidjson==1.23
