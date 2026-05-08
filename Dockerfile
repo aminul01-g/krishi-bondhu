@@ -25,11 +25,14 @@ WORKDIR $APP_HOME
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     ffmpeg \
+    libgomp1 \
+    libsndfile1 \
     gcc \
     python3-dev \
     libpq-dev \
