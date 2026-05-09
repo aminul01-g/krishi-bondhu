@@ -83,12 +83,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
         csp = (
-            "default-src 'self' https://huggingface.co 'unsafe-inline' 'unsafe-eval' data: blob:;"
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://huggingface.co 'sha256-7PZaH7TzFg4JDt5xJguN70ch6VcMcPlLW4N3fQ936Fs=' 'sha256-MqH8JJsLY2fF2bGYY1rZlpCNrRCnWKrzrrDefixUJTI=' 'sha256-ZswfTY7H35rbV8WC7NXBoic7WNu86vSzCDchNWwZZDM=';"
-            "style-src 'self' 'unsafe-inline';"
-            "connect-src 'self' https://huggingface.co wss://huggingface.co https://*.hf.space wss://*.hf.space;"
+            "default-src 'self' https://huggingface.co;"
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://huggingface.co https://js.stripe.com "
+            "'sha256-7PZaH7TzFg4JdT5xJguN7Och6VcMcP1LW4N3fQ936Fs=' "
+            "'sha256-MqH8JJslY2fF2bGYY1rZlpCNrRCnWKRzrrDefixUJTI=' "
+            "'sha256-ZswfTY7H35rbV8WC7NXBoiC7WNu86vSzCDChNWwZZDM=';"
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+            "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+            "font-src 'self' https://fonts.gstatic.com data:;"
+            "connect-src 'self' https://huggingface.co wss://huggingface.co https://*.hf.space wss://*.hf.space https://api.stripe.com;"
+            "img-src 'self' data: blob: https://huggingface.co https://*.stripe.com;"
+            "media-src 'self' data: blob: https://huggingface.co;"
+            "frame-src 'self' https://js.stripe.com https://hooks.stripe.com;"
+            "frame-ancestors 'self' https://huggingface.co;"
         )
         response.headers["Content-Security-Policy"] = csp
+        
+        # Modern Permissions-Policy (replaces deprecated Feature-Policy)
+        response.headers["Permissions-Policy"] = "camera=*, microphone=*, geolocation=*, payment=*, usb=()"
+        
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)

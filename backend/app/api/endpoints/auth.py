@@ -20,8 +20,12 @@ class UserRegister(BaseModel):
 
 router = APIRouter()
 
-@router.post("/register")
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user: UserRegister, db: AsyncSession = Depends(get_db)):
+    """
+    Registers a new user. 
+    Accepts credentials in the JSON request body, not query parameters.
+    """
     # Check if user already exists
     result = await db.execute(select(User).where(User.username == user.username))
     if result.scalars().first():
@@ -31,6 +35,7 @@ async def register(user: UserRegister, db: AsyncSession = Depends(get_db)):
         )
 
     # Create new user with hashed password and a unique external_id
+    # We do NOT log the raw password here.
     hashed_pw = get_password_hash(user.password)
     new_user = User(
         username=user.username,
