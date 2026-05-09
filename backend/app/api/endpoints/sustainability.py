@@ -77,21 +77,21 @@ async def explain_sustainability(
     """
     try:
         # Use AI Coach to provide a personalized explanation instead of a static string
-        crew_obj = HealthAndSoilCrew()
-        crew = crew_obj.create_crew()
-
         explanation_task = Task(
             description=f"Explain to the farmer how their sustainability score is calculated based on their farm habits. Highlight the impact of synthetic vs organic inputs. Keep it encouraging and educational.",
             expected_output="A supportive and clear explanation in Bengali/English about the sustainability scoring system.",
             agent=sustainability_coach
         )
 
+        crew_obj = HealthAndSoilCrew()
+        crew = crew_obj.create_crew(tasks=[explanation_task])
+
         inputs = {
             "user_input": "How is my sustainability score calculated?",
             "user_id": current_user.external_id
         }
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[explanation_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         return {
             "status": "success",

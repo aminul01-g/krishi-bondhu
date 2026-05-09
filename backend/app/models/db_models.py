@@ -123,3 +123,4 @@ class AsyncTask(Base):
 from . import community_models  # noqa: F401
 from . import marketplace_models  # noqa: F401
 from . import emergency_models  # noqa: F401
+from . import production_models  # noqa: F401

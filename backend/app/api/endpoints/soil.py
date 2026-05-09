@@ -34,9 +34,6 @@ async def analyze_soil_image(
         image_path = await save_image_local(image)
 
         # Use specialized HealthAndSoilCrew
-        crew_obj = HealthAndSoilCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.soil_scientist import soil_scientist
 
@@ -46,6 +43,9 @@ async def analyze_soil_image(
             agent=soil_scientist
         )
 
+        crew_obj = HealthAndSoilCrew()
+        crew = crew_obj.create_crew(tasks=[soil_task])
+
         inputs = {
             "image_path": image_path,
             "gps": {"lat": lat, "lon": lon},
@@ -53,7 +53,7 @@ async def analyze_soil_image(
         }
 
         import asyncio
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[soil_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         return SoilAnalysisResponse(analysis=str(result))
 

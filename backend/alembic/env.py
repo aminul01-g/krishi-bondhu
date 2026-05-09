@@ -23,8 +23,8 @@ import app.models  # Ensure all model modules are imported for Alembic metadata
 from app.db import DATABASE_URL
 
 def get_url():
-    # Get DATABASE_URL from environment or use default
-    url = os.getenv("DATABASE_URL", DATABASE_URL)
+    # Get DATABASE_URL from environment or use the one resolved in app.db
+    url = os.getenv("DATABASE_URL") or DATABASE_URL
     # Convert asyncpg URL to psycopg2 for Alembic (Alembic uses sync driver)
     if url.startswith("postgresql+asyncpg://"):
         url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")

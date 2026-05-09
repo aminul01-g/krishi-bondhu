@@ -52,17 +52,17 @@ async def submit_question(
 ):
     try:
         # Use AI to enrich the question metadata before saving
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         enrich_task = Task(
             description=f"Analyze this farming question: '{payload.question_text}'. Categorize it and suggest 3 relevant keywords for better community discovery.",
             expected_output="A JSON object with 'category' and 'keywords' (list of strings).",
             agent=community_connector
         )
 
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[enrich_task])
+
         inputs = {"user_input": payload.question_text, "user_id": current_user.external_id}
-        ai_metadata = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[enrich_task])
+        ai_metadata = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         question = await create_community_question(
             db,
@@ -133,9 +133,6 @@ async def upvote_answer_endpoint(
 async def escalate_question_endpoint(question_id: str, payload: EscalateRequest, db: AsyncSession = Depends(get_db)):
     try:
         # Use AI to summarize the case before escalating to a human expert
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         summary_task = Task(
             description=f"Summarize the core issue for question ID {question_id} and explain why it requires urgent expert attention based on location ({payload.lat}, {payload.lon}).",
@@ -143,8 +140,11 @@ async def escalate_question_endpoint(question_id: str, payload: EscalateRequest,
             agent=community_connector
         )
 
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[summary_task])
+
         inputs = {"user_input": f"Escalate question {question_id}", "gps": {"lat": payload.lat, "lon": payload.lon}}
-        summary_text = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[summary_task])
+        summary_text = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         escalation = await escalate_question(db, question_id, payload.lat, payload.lon)
         return {"escalation_id": str(escalation.id), "status": escalation.status, "ai_summary": str(summary_text)}

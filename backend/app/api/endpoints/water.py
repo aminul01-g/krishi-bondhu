@@ -41,9 +41,6 @@ async def get_irrigation_advice(
         )
 
         # Use the crew to turn the technical balance into a helpful Bengali/English response
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.water_advisor import water_advisor
 
@@ -53,13 +50,16 @@ async def get_irrigation_advice(
             agent=water_advisor
         )
 
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[water_task])
+
         inputs = {
             "user_input": f"I need irrigation advice for my {request.crop} crop.",
             "gps": {"lat": request.lat, "lon": request.lon},
             "user_id": current_user.external_id
         }
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[water_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
         advice = str(result)
 
         # Save to DB - Use the actual moisture index from weather data

@@ -31,9 +31,10 @@ class KrishiCrew:
             farm_manager
         ]
 
-    def create_crew(self):
+    def create_crew(self, tasks=None):
         return Crew(
             agents=self.agents,
+            tasks=tasks or [],
             process=Process.sequential,
             verbose=True
         )
@@ -49,9 +50,10 @@ class MarketAnalysisCrew:
             procurement_advisor
         ]
 
-    def create_crew(self):
+    def create_crew(self, tasks=None):
         return Crew(
             agents=self.agents,
+            tasks=tasks or [],
             process=Process.sequential,
             verbose=True
         )
@@ -68,9 +70,10 @@ class HealthAndSoilCrew:
             sustainability_coach
         ]
 
-    def create_crew(self):
+    def create_crew(self, tasks=None):
         return Crew(
             agents=self.agents,
+            tasks=tasks or [],
             process=Process.sequential,
             verbose=True
         )
@@ -86,9 +89,10 @@ class EmergencyResponseCrew:
             alert_advisor
         ]
 
-    def create_crew(self):
+    def create_crew(self, tasks=None):
         return Crew(
             agents=self.agents,
+            tasks=tasks or [],
             process=Process.sequential,
             verbose=True
         )
@@ -104,9 +108,10 @@ class FinancialPlanningCrew:
             finance_advisor
         ]
 
-    def create_crew(self):
+    def create_crew(self, tasks=None):
         return Crew(
             agents=self.agents,
+            tasks=tasks or [],
             process=Process.sequential,
             verbose=True
         )

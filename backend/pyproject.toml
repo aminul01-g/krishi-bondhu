@@ -75,6 +75,3 @@ dev-dependencies = [
     "black>=24.1.0",
     "isort>=5.13.2"
 ]
-
-[tool.pyrefly]
-python_interpreter = "venv/bin/python3"

@@ -354,9 +354,6 @@ async def upload_audio(
     try:
         # Use the new Crew-based logic
         from app.crews.krishi_crew import KrishiCrew
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.bengali_interpreter import bengali_interpreter
 
@@ -366,7 +363,10 @@ async def upload_audio(
             agent=bengali_interpreter
         )
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[route_task])
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[route_task])
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
         reply_text = str(result)
 
         user_db_id = current_user.id
@@ -418,9 +418,6 @@ async def upload_image(
     }
     try:
         from app.crews.krishi_crew import KrishiCrew
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.disease_analyst import disease_analyst
 
@@ -430,7 +427,10 @@ async def upload_image(
             agent=disease_analyst
         )
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[vision_task])
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[vision_task])
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
         reply_text = str(result)
 
         user_db_id = current_user.id
@@ -505,9 +505,6 @@ async def chat(
     }
     try:
         from app.crews.krishi_crew import KrishiCrew
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.bengali_interpreter import bengali_interpreter
 
@@ -517,7 +514,10 @@ async def chat(
             agent=bengali_interpreter
         )
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state, tasks=[route_task])
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[route_task])
+
+        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
         reply_text = str(result)
 
         user_db_id = current_user.id

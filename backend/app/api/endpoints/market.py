@@ -34,9 +34,6 @@ async def get_market_advice(
         gps_data = {"lat": lat, "lon": lon} if lat is not None and lon is not None else None
 
         # Use the specialized MarketAnalysisCrew instead of the global orchestrator
-        crew_obj = MarketAnalysisCrew()
-        crew = crew_obj.create_crew()
-
         # We define a specific task for this request since we are bypassing the router
         from crewai import Task
         from app.agents.market_advisor import market_advisor
@@ -47,6 +44,10 @@ async def get_market_advice(
             agent=market_advisor
         )
 
+        # Use the specialized MarketAnalysisCrew with the task attached at creation
+        crew_obj = MarketAnalysisCrew()
+        crew = crew_obj.create_crew(tasks=[market_task])
+
         inputs = {
             "crop": crop,
             "gps": gps_data,
@@ -55,7 +56,7 @@ async def get_market_advice(
 
         # Execute the crew
         import asyncio
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[market_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
         advice_text = str(result)
 
         # Persist market prices using the service layer

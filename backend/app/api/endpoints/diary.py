@@ -36,9 +36,6 @@ async def add_diary_entry(
     """
     try:
         # Use specialized FinancialPlanningCrew for diary management
-        crew_obj = FinancialPlanningCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
 
         diary_task = Task(
@@ -47,13 +44,16 @@ async def add_diary_entry(
             agent=farm_manager
         )
 
+        crew_obj = FinancialPlanningCrew()
+        crew = crew_obj.create_crew(tasks=[diary_task])
+
         inputs = {
             "user_input": request.transcript,
             "user_id": current_user.external_id
         }
 
         # Execute the crew
-        result_str = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[diary_task])
+        result_str = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         # Clean JSON from LLM output
         json_str = str(result_str).replace("```json", "").replace("```", "").strip()

@@ -29,9 +29,6 @@ async def get_subsidy_schemes(
 ):
     try:
         # Use specialized FinancialPlanningCrew
-        crew_obj = FinancialPlanningCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.finance_advisor import finance_advisor
 
@@ -41,12 +38,15 @@ async def get_subsidy_schemes(
             agent=finance_advisor
         )
 
+        crew_obj = FinancialPlanningCrew()
+        crew = crew_obj.create_crew(tasks=[subsidy_task])
+
         inputs = {
             "user_input": f"I am looking for subsidies for {request.crop} on {request.land_size} decimals of land.",
             "user_id": current_user.external_id
         }
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[subsidy_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
         return {"advice": str(result)}
     except Exception as e:
         logger.error(f"Error fetching subsidies: {e}")
@@ -91,9 +91,6 @@ async def get_insurance_quote(
         quote_data = finance_service.get_insurance_quote(request.crop, request.land_size)
 
         # Use FinancialPlanningCrew to explain the quote in a supportive way
-        crew_obj = FinancialPlanningCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.finance_advisor import finance_advisor
 
@@ -103,12 +100,15 @@ async def get_insurance_quote(
             agent=finance_advisor
         )
 
+        crew_obj = FinancialPlanningCrew()
+        crew = crew_obj.create_crew(tasks=[insurance_task])
+
         inputs = {
             "user_input": f"I want an insurance quote for {request.crop} on {request.land_size} decimals.",
             "user_id": user_id
         }
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[insurance_task])
+        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
         advice = str(result)
 
         # Log quote to DB

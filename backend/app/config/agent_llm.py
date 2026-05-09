@@ -90,14 +90,13 @@ def get_agent_llm(model_name: str | None = None):
     # --- 1. HuggingFace ---------------------------------------------------
     if hf_token:
         try:
-            from langchain_huggingface import ChatHuggingFace
-            from langchain_community.llms import HuggingFaceHub
+            from langchain_huggingface import HuggingFaceEndpoint
 
-            llm = ChatHuggingFace(
-                llm=HuggingFaceHub(
-                    repo_id=model_name,
-                    huggingfacehub_api_token=hf_token,
-                )
+            llm = HuggingFaceEndpoint(
+                repo_id=model_name,
+                huggingfacehub_api_token=hf_token,
+                temperature=0.7,
+                model_kwargs={"max_length": 512},
             )
             logger.info("Agent LLM initialised: HuggingFace (%s)", model_name)
             return llm

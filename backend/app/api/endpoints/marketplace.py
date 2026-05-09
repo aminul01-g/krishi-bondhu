@@ -4,6 +4,7 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date
 import asyncio
+import logging
 
 from app.db import get_db
 from app.models.db_models import User
@@ -20,6 +21,7 @@ from app.crews.krishi_crew import MarketAnalysisCrew
 from app.agents.procurement_advisor import procurement_advisor
 from crewai import Task
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 class DealerCreate(BaseModel):
@@ -124,9 +126,6 @@ async def verify_product(
         )
 
         # 2. Use specialized MarketAnalysisCrew to interpret the result and provide a warning/advice
-        crew_obj = MarketAnalysisCrew()
-        crew = crew_obj.create_crew()
-
         verify_task = Task(
             description=(
                 f"Interpret the product scan result: {scan_result}. "
@@ -137,13 +136,16 @@ async def verify_product(
             agent=procurement_advisor
         )
 
+        crew_obj = MarketAnalysisCrew()
+        crew = crew_obj.create_crew(tasks=[verify_task])
+
         inputs = {
             "user_input": "Is this product authentic?",
             "scan_data": scan_result,
             "user_id": current_user.external_id
         }
 
-        ai_verdict = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[verify_task])
+        ai_verdict = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         return {
             "scan_result": scan_result,

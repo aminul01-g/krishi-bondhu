@@ -42,9 +42,6 @@ async def create_season_plan(
         )
 
         # 2. Use YieldPlannerAgent to turn raw data into a structured, actionable strategy
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         planning_task = Task(
             description=(
                 f"Turn the following raw seasonal plan for {payload.crop} into a high-impact strategy. "
@@ -56,13 +53,16 @@ async def create_season_plan(
             agent=yield_planner
         )
 
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[planning_task])
+
         inputs = {
             "user_input": f"Generate a high-yield plan for {payload.crop}.",
             "user_id": current_user.external_id,
             "raw_plan": plan_result
         }
 
-        ai_strategy = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[planning_task])
+        ai_strategy = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         return {
             "status": "success",

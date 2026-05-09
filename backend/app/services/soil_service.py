@@ -2,8 +2,6 @@ import os
 import logging
 import json
 from typing import Dict, Any, Optional, List
-from langchain_huggingface import ChatHuggingFace
-from langchain_community.llms import HuggingFaceHub
 import base64
 
 logger = logging.getLogger("SoilService")

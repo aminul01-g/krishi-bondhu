@@ -30,14 +30,14 @@ async def get_personalized_recommendations(
             raise HTTPException(status_code=500, detail=raw_recs["error"])
 
         # 2. Use Agronomist Agent to refine these into a conversational, supportive plan
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew()
-
         rec_task = Task(
             description=f"Refine the following raw agricultural recommendations for the farmer: {raw_recs}. Convert them into a supportive, step-by-step guide in Bengali/English, explaining the 'why' behind each suggestion.",
             expected_output="A personalized and encouraging agricultural guidance report.",
             agent=agronomist_expert
         )
+
+        crew_obj = KrishiCrew()
+        crew = crew_obj.create_crew(tasks=[rec_task])
 
         inputs = {
             "user_input": "Give me my personalized farming recommendations.",
@@ -45,7 +45,7 @@ async def get_personalized_recommendations(
             "raw_data": raw_recs
         }
 
-        ai_advice = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[rec_task])
+        ai_advice = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         return {
             "raw_metrics": raw_recs,

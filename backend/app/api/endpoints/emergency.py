@@ -63,9 +63,6 @@ async def create_report(
     """
     try:
         # 1. Use the Specialized Emergency Crew to generate the official report text
-        crew_obj = EmergencyResponseCrew()
-        crew = crew_obj.create_crew()
-
         from crewai import Task
         from app.agents.emergency_response import emergency_response
 
@@ -80,6 +77,9 @@ async def create_report(
             agent=emergency_response
         )
 
+        crew_obj = EmergencyResponseCrew()
+        crew = crew_obj.create_crew(tasks=[report_task])
+
         inputs = {
             "user_id": current_user.external_id,
             "crop": payload.crop_type,
@@ -88,7 +88,7 @@ async def create_report(
         }
 
         # Generate the a-detailed response
-        report_text = await asyncio.to_thread(crew.kickoff, inputs=inputs, tasks=[report_task])
+        report_text = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
         # 2. Save the structured report to the database via Service Layer
         report = await create_damage_report(

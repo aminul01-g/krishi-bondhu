@@ -7,6 +7,7 @@ from . import db_models
 from . import community_models
 from . import marketplace_models
 from . import emergency_models
+from . import production_models
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "community_models",
     "marketplace_models",
     "emergency_models",
+    "production_models",
 ]
