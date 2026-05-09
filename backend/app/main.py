@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, Form, Depends, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 import os
@@ -78,6 +79,20 @@ async def logging_middleware(request: Request, call_next):
     finally:
         structlog.contextvars.clear_contextvars()
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        csp = (
+            "default-src 'self' https://huggingface.co 'unsafe-inline' 'unsafe-eval' data: blob:;"
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://huggingface.co 'sha256-7PZaH7TzFg4JDt5xJguN70ch6VcMcPlLW4N3fQ936Fs=' 'sha256-MqH8JJsLY2fF2bGYY1rZlpCNrRCnWKrzrrDefixUJTI=' 'sha256-ZswfTY7H35rbV8WC7NXBoic7WNu86vSzCDchNWwZZDM=';"
+            "style-src 'self' 'unsafe-inline';"
+            "connect-src 'self' https://huggingface.co wss://huggingface.co https://*.hf.space wss://*.hf.space;"
+        )
+        response.headers["Content-Security-Policy"] = csp
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Helper to get/create user
 from sqlalchemy import select, desc
 
@@ -125,7 +140,13 @@ async def save_conversation_to_db(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:3000",
+        "https://huggingface.co",
+        "https://krishibondhu.hf.space",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

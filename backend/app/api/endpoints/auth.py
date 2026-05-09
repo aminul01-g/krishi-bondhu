@@ -12,13 +12,18 @@ from app.core.security import (
     verify_password
 )
 from app.core.dependencies import get_current_user
+from pydantic import BaseModel, Field
+
+class UserRegister(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8)
 
 router = APIRouter()
 
 @router.post("/register")
-async def register(username: str, password: str, db: AsyncSession = Depends(get_db)):
+async def register(user: UserRegister, db: AsyncSession = Depends(get_db)):
     # Check if user already exists
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(User).where(User.username == user.username))
     if result.scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -26,9 +31,9 @@ async def register(username: str, password: str, db: AsyncSession = Depends(get_
         )
 
     # Create new user with hashed password and a unique external_id
-    hashed_pw = get_password_hash(password)
+    hashed_pw = get_password_hash(user.password)
     new_user = User(
-        username=username,
+        username=user.username,
         hashed_password=hashed_pw,
         external_id=str(uuid.uuid4())
     )

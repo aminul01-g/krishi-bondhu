@@ -34,7 +34,7 @@ async function request(method, path, { body, isForm = false, signal } = {}) {
 
 // --- Auth ---
 export const register = (username, password) =>
-  request('POST', `/api/auth/register?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`);
+  request('POST', `/api/auth/register`, { body: { username, password } });
 
 export const login = async (username, password) => {
   const form = new URLSearchParams();
