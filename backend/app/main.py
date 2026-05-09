@@ -69,6 +69,16 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"error": "Internal Server Error", "detail": "An unexpected error occurred. Please try again later.", "code": "INTERNAL_SERVER_ERROR"}
     )
 
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.info("Validation error occurred", detail=exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={"error": "Validation Error", "detail": exc.errors(), "code": "VALIDATION_ERROR"}
+    )
+
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
@@ -84,10 +94,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         csp = (
             "default-src 'self' https://huggingface.co;"
-            "script-src 'self' 'unsafe-eval' https://huggingface.co https://js.stripe.com https://m.stripe.network "
-            "'sha256-7PZaH7TzFg4JdT5xJguN7Och6VcMcP1LW4N3fQ936Fs=' "
-            "'sha256-MqH8JJslY2fF2bGYY1rZlpCNrRCnWKRzrrDefixUJTI=' "
-            "'sha256-ZswfTY7H35rbV8WC7NXBoiC7WNu86vSzCDChNWwZZDM=';"
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://huggingface.co https://js.stripe.com https://m.stripe.network;"
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
             "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com;"
             "font-src 'self' https://fonts.gstatic.com data:;"
