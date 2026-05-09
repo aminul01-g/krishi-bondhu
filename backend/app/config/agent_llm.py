@@ -70,6 +70,9 @@ def _get_hf_token() -> str | None:
 # Track warnings so we only log once per provider failure.
 _warned: set[str] = set()
 
+# Singleton LLM instance to avoid repeated initializations and HF token warnings.
+_cached_llm: Any = None
+
 
 def get_agent_llm(model_name: str | None = None):
     """Return the best available LLM for CrewAI agents.
@@ -80,10 +83,17 @@ def get_agent_llm(model_name: str | None = None):
       3. OpenAI
       4. FallbackLLM (offline placeholder)
 
+    The result is cached as a singleton so all agents share the same
+    LLM instance, avoiding repeated HF token login warnings.
+
     Args:
         model_name: Optional HuggingFace model repo ID. Falls back to
                     ``HUGGINGFACE_MODEL`` env var, then ``DEFAULT_HF_MODEL``.
     """
+    global _cached_llm
+    if _cached_llm is not None:
+        return _cached_llm
+
     model_name = model_name or os.getenv("HUGGINGFACE_MODEL", DEFAULT_HF_MODEL)
     hf_token = _get_hf_token()
 
@@ -96,9 +106,10 @@ def get_agent_llm(model_name: str | None = None):
                 repo_id=model_name,
                 huggingfacehub_api_token=hf_token,
                 temperature=0.7,
-                model_kwargs={"max_length": 512},
+                max_new_tokens=512,
             )
             logger.info("Agent LLM initialised: HuggingFace (%s)", model_name)
+            _cached_llm = llm
             return llm
         except Exception as e:
             err_str = str(e)
@@ -130,6 +141,7 @@ def get_agent_llm(model_name: str | None = None):
                 temperature=0.7,
             )
             logger.info("Agent LLM initialised: Gemini")
+            _cached_llm = llm
             return llm
         except Exception as e:
             if "gemini" not in _warned:
@@ -144,6 +156,7 @@ def get_agent_llm(model_name: str | None = None):
 
             llm = ChatOpenAI(openai_api_key=openai_key, temperature=0.7)
             logger.info("Agent LLM initialised: OpenAI")
+            _cached_llm = llm
             return llm
         except Exception as e:
             if "openai" not in _warned:
@@ -158,5 +171,6 @@ def get_agent_llm(model_name: str | None = None):
             "OPENAI_API_KEY in the environment."
         )
         _warned.add("fallback")
-    return FallbackLLM()
+    _cached_llm = FallbackLLM()
+    return _cached_llm
 

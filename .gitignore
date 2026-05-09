@@ -213,3 +213,4 @@ ENV/
 *.h5
 *.onnxbackend.db
 backend/backend.db
+backend/krishi.db

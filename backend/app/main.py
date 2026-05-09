@@ -187,6 +187,17 @@ app.add_middleware(
 @app.on_event("startup")
 async def create_database_tables():
     from sqlalchemy import text
+
+    # --- One-time HuggingFace Hub login ---
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN") or os.getenv("HUGGINGFACE_API_KEY")
+    if hf_token:
+        try:
+            from huggingface_hub import login
+            login(token=hf_token, add_to_git_credential=False)
+            logger.info("HuggingFace Hub login completed (one-time).")
+        except Exception as e:
+            logger.warning(f"HuggingFace Hub login failed: {e}")
+
     try:
         async with engine.begin() as conn:
             if "postgresql" in DATABASE_URL.lower():

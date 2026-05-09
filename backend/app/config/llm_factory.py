@@ -41,7 +41,7 @@ def get_llm():
                     repo_id=hf_model,
                     huggingfacehub_api_token=hf_api_key,
                     temperature=0.7,
-                    model_kwargs={"max_length": 512},
+                    max_new_tokens=512,
                 )
             except Exception as e:
                 logger.warning(f"HuggingFace LLM init failed: {e}. Falling back.")
