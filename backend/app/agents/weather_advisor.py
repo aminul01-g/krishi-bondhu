@@ -1,8 +1,7 @@
 from crewai import Agent
 from app.config.agent_llm import get_agent_llm
-import os
 
-llm = get_agent_llm(os.getenv("HUGGINGFACE_MODEL", "meta-llama/Llama-3.2-3B-Instruct"))
+llm = get_agent_llm()
 
 weather_advisor = Agent(
     role="Weather Advisor Agent",

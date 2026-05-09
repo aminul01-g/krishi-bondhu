@@ -1,6 +1,8 @@
 import os
 import logging
 
+from app.config.agent_llm import DEFAULT_HF_MODEL
+
 logger = logging.getLogger(__name__)
 
 _hf_token_warned = False
@@ -31,9 +33,7 @@ def get_llm():
                 _hf_token_warned = True
             # Fall through to Gemini below
         else:
-            hf_model = os.getenv(
-                "HUGGINGFACE_MODEL", "meta-llama/Llama-3.2-3B-Instruct"
-            )
+            hf_model = os.getenv("HUGGINGFACE_MODEL", DEFAULT_HF_MODEL)
             try:
                 from langchain_huggingface import HuggingFaceEndpoint
 
