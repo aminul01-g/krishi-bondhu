@@ -37,7 +37,16 @@ export class ResilientSSE {
         // If manually closed, don't attempt to reconnect
         if (this.manualClose) return;
 
-        console.warn("[SSE] Connection error or aborted.", error);
+        // Specifically handle DOMException: Aborted
+        // Some browsers/environments throw DOMException when the connection is aborted
+        if (
+          error instanceof DOMException && 
+          (error.name === 'AbortError' || error.message.includes('Aborted'))
+        ) {
+          console.warn("[SSE] Connection aborted by browser (DOMException: Aborted). Reconnecting gracefully.");
+        } else {
+          console.warn("[SSE] Connection error.", error);
+        }
         
         // Close the current instance
         if (this.es) {
@@ -52,7 +61,11 @@ export class ResilientSSE {
         this.handleReconnect(onMessage, onError);
       };
     } catch (err) {
-      console.error("[SSE] Failed to initialize EventSource:", err);
+      if (err instanceof DOMException && err.name === 'AbortError') {
+         console.warn("[SSE] Initialization aborted (DOMException: Aborted).", err);
+      } else {
+         console.error("[SSE] Failed to initialize EventSource:", err);
+      }
       this.handleReconnect(onMessage, onError);
     }
   }

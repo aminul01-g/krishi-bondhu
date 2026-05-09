@@ -84,24 +84,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         csp = (
             "default-src 'self' https://huggingface.co;"
-            "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://huggingface.co https://js.stripe.com "
+            "script-src 'self' 'unsafe-eval' https://huggingface.co https://js.stripe.com https://m.stripe.network "
             "'sha256-7PZaH7TzFg4JdT5xJguN7Och6VcMcP1LW4N3fQ936Fs=' "
             "'sha256-MqH8JJslY2fF2bGYY1rZlpCNrRCnWKRzrrDefixUJTI=' "
             "'sha256-ZswfTY7H35rbV8WC7NXBoiC7WNu86vSzCDChNWwZZDM=';"
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
             "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com;"
             "font-src 'self' https://fonts.gstatic.com data:;"
-            "connect-src 'self' https://huggingface.co wss://huggingface.co https://*.hf.space wss://*.hf.space https://api.stripe.com;"
+            "connect-src 'self' https://huggingface.co wss://huggingface.co https://*.hf.space wss://*.hf.space https://api.stripe.com https://m.stripe.network;"
             "img-src 'self' data: blob: https://huggingface.co https://*.stripe.com;"
             "media-src 'self' data: blob: https://huggingface.co;"
-            "frame-src 'self' https://js.stripe.com https://hooks.stripe.com;"
+            "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://m.stripe.network;"
             "frame-ancestors 'self' https://huggingface.co;"
         )
         response.headers["Content-Security-Policy"] = csp
         
-        # Modern Permissions-Policy (replaces deprecated Feature-Policy)
-        response.headers["Permissions-Policy"] = "camera=*, microphone=*, geolocation=*, payment=*, usb=()"
+        # Modern Permissions-Policy
+        response.headers["Permissions-Policy"] = "camera=(self \"https://huggingface.co\"), microphone=(self \"https://huggingface.co\"), geolocation=(self \"https://huggingface.co\"), payment=(self \"https://huggingface.co\"), usb=(), accelerometer=(self \"https://huggingface.co\"), gyroscope=(self \"https://huggingface.co\")"
         
+        # Ensure session cookies within iframe are partitioned properly
+        # This resolves the Hugging Face Storage Partitioning warning.
+        if "set-cookie" in response.headers:
+            cookies = response.headers.get_all("set-cookie")
+            response.headers.raw.pop(b"set-cookie")
+            for cookie in cookies:
+                if "SameSite=None" not in cookie:
+                    cookie += "; SameSite=None; Secure"
+                if "Partitioned" not in cookie:
+                    cookie += "; Partitioned"
+                response.headers.append("set-cookie", cookie)
+
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
