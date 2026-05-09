@@ -51,11 +51,31 @@ def run_migrations_online():
     # Update config with the converted URL
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = url
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    
+    if "sqlite" in url:
+        from sqlalchemy import create_engine
+        from sqlalchemy.event import listen
+        import sqlite3
+        
+        def load_spatialite(dbapi_conn, connection_record):
+            dbapi_conn.enable_load_extension(True)
+            try:
+                dbapi_conn.load_extension('mod_spatialite')
+            except Exception as e:
+                print(f"[WARNING] Alembic could not load mod_spatialite: {e}")
+                try:
+                    dbapi_conn.load_extension('mod_spatialite.so')
+                except Exception:
+                    pass
+        
+        connectable = create_engine(url, poolclass=pool.NullPool)
+        listen(connectable, 'connect', load_spatialite)
+    else:
+        connectable = engine_from_config(
+            configuration,
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
 
     with connectable.connect() as connection:
         do_run_migrations(connection)

@@ -19,11 +19,29 @@ DATABASE_URL = database_url
 
 # Create engine with appropriate settings based on database type
 if "sqlite" in DATABASE_URL:
+    from sqlalchemy.pool import NullPool
+    
+    # We need to enable spatialite for SQLite
+    async def create_sqlite_connection():
+        import aiosqlite
+        conn = await aiosqlite.connect(sqlite_path)
+        await conn.enable_load_extension(True)
+        try:
+            await conn.load_extension("mod_spatialite")
+        except Exception as e:
+            print(f"[WARNING] Could not load mod_spatialite directly: {e}. Trying alternative names.")
+            try:
+                await conn.load_extension("mod_spatialite.so")
+            except Exception as e2:
+                print(f"[WARNING] Failed to load mod_spatialite.so: {e2}")
+        return conn
+
     engine = create_async_engine(
-        DATABASE_URL,
+        "sqlite+aiosqlite://", # We use empty URL and pass a creator
+        creator=create_sqlite_connection,
         future=True,
         echo=False,
-        connect_args={"check_same_thread": False}
+        poolclass=NullPool
     )
 else:
     # PostgreSQL connection

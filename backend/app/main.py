@@ -107,7 +107,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = csp
         
         # Modern Permissions-Policy
-        response.headers["Permissions-Policy"] = "camera=(self \"https://huggingface.co\"), microphone=(self \"https://huggingface.co\"), geolocation=(self \"https://huggingface.co\"), payment=(self \"https://huggingface.co\"), usb=(), accelerometer=(self \"https://huggingface.co\"), gyroscope=(self \"https://huggingface.co\")"
+        response.headers["Permissions-Policy"] = "camera=*, microphone=*, geolocation=*, payment=*, usb=(), accelerometer=*, gyroscope=*"
         
         # Ensure session cookies within iframe are partitioned properly
         # This resolves the Hugging Face Storage Partitioning warning.

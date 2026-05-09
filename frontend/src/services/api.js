@@ -23,7 +23,14 @@ async function request(method, path, { body, isForm = false, signal } = {}) {
   const res = await fetch(url, config);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || err.error || `API Error ${res.status}`);
+    let errorMsg = err.error || `API Error ${res.status}`;
+    if (Array.isArray(err.detail)) {
+      // Handle FastAPI validation errors (array of dicts)
+      errorMsg = err.detail.map(e => e.msg || JSON.stringify(e)).join(', ');
+    } else if (typeof err.detail === 'string') {
+      errorMsg = err.detail;
+    }
+    throw new Error(errorMsg);
   }
 
   const contentType = res.headers.get('content-type') || '';

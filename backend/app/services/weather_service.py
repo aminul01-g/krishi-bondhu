@@ -69,13 +69,22 @@ class WeatherService:
     def __init__(self) -> None:
         self.api_key = os.getenv("WEATHER_API_KEY")
         redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-        try:
-            from redis import Redis
-            self.redis: Optional[Any] = Redis.from_url(redis_url, decode_responses=True)
-            self.redis.ping()  # Validate connection eagerly
-        except Exception as exc:
-            logger.warning(f"Redis unavailable ({exc}). Using in-memory cache fallback.")
-            self.redis = None
+        
+        # In a standalone Space environment, skip Redis connection to avoid timeouts and errors
+        is_hf_space = os.getenv("SPACE_ID") is not None
+        use_redis = os.getenv("USE_REDIS", "false" if is_hf_space else "true").lower() == "true"
+        
+        self.redis = None
+        if use_redis:
+            try:
+                from redis import Redis
+                self.redis: Optional[Any] = Redis.from_url(redis_url, decode_responses=True)
+                self.redis.ping()  # Validate connection eagerly
+            except Exception as exc:
+                logger.warning(f"Redis unavailable ({exc}). Using in-memory cache fallback.")
+                self.redis = None
+        else:
+            logger.info("Redis disabled via config. Using in-memory cache fallback.")
 
         # Simple in-memory dict cache when Redis is absent
         self._mem_cache: Dict[str, Any] = {}
