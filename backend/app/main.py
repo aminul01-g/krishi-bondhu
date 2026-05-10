@@ -368,17 +368,40 @@ async def upload_audio(
         from crewai import Task
         from app.agents.bengali_interpreter import bengali_interpreter
 
-        route_task = Task(
-            description=f"Interpret the user's intent: {transcript}. Route to the best expert agent.",
-            expected_output="A JSON object specifying the intent and a preliminary response.",
-            agent=bengali_interpreter
-        )
+        clean_msg = transcript.lower().strip()
+        greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
+        
+        if clean_msg in greetings:
+            reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
+        else:
+            route_task = Task(
+                description=(
+                    f"Process the user's message: {transcript}. "
+                    "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
+                    "You must provide the final expert advice directly to the user."
+                ),
+                expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
+                agent=bengali_interpreter
+            )
 
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew(tasks=[route_task])
+            crew_obj = KrishiCrew()
+            crew = crew_obj.create_crew(tasks=[route_task])
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
-        reply_text = str(result)
+            result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
+            raw_reply = str(result)
+            
+            import json
+            try:
+                data = json.loads(raw_reply)
+                if isinstance(data, dict):
+                    parts = []
+                    for k, v in data.items():
+                        parts.append(f"{str(k).replace('_', ' ').title()}: {v}")
+                    reply_text = "\n".join(parts)
+                else:
+                    reply_text = raw_reply
+            except Exception:
+                reply_text = raw_reply
 
         user_db_id = current_user.id
         await save_conversation_to_db(
@@ -519,17 +542,27 @@ async def chat(
         from crewai import Task
         from app.agents.bengali_interpreter import bengali_interpreter
 
-        route_task = Task(
-            description=f"Interpret the user's intent from this message: {message}. Route to the most la- la la la appropriate expert agent.",
-            expected_output="A JSON object with the intent and a a-dedicated response.",
-            agent=bengali_interpreter
-        )
+        clean_msg = message.lower().strip()
+        greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
+        
+        if clean_msg in greetings:
+            reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
+        else:
+            route_task = Task(
+                description=(
+                    f"Process the user's message: {message}. "
+                    "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
+                    "You must provide the final expert advice directly to the user."
+                ),
+                expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
+                agent=bengali_interpreter
+            )
 
-        crew_obj = KrishiCrew()
-        crew = crew_obj.create_crew(tasks=[route_task])
+            crew_obj = KrishiCrew()
+            crew = crew_obj.create_crew(tasks=[route_task])
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
-        reply_text = str(result)
+            result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
+            reply_text = str(result)
 
         user_db_id = current_user.id
         await save_conversation_to_db(
