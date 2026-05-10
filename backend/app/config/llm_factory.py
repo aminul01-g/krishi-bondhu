@@ -11,13 +11,27 @@ _hf_token_warned = False
 def get_llm():
     """
     Factory function to return the configured LLM based on environment variables.
-    Defaults to Gemini if no provider is specified or if 'gemini' is set.
+    Defaults to Groq if GROQ_API_KEY is present, then HuggingFace, then Gemini.
     Falls back gracefully when tokens/packages are missing.
     """
     global _hf_token_warned
-    provider = os.getenv("LLM_PROVIDER", "gemini").lower()
+    provider = os.getenv("LLM_PROVIDER", "").lower()
 
-    if provider == "huggingface":
+    if provider == "groq" or (not provider and os.getenv("GROQ_API_KEY")):
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if groq_api_key:
+            try:
+                from langchain_groq import ChatGroq
+
+                return ChatGroq(
+                    groq_api_key=groq_api_key,
+                    model_name=os.getenv("GROQ_MODEL", "llama-3.2-3b-preview"),
+                    temperature=0.7,
+                )
+            except Exception as e:
+                logger.warning(f"Groq LLM init failed: {e}. Falling back.")
+
+    if provider == "huggingface" or (not provider and (os.getenv("HUGGINGFACEHUB_API_TOKEN") or os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN"))):
         hf_api_key = (
             os.getenv("HUGGINGFACEHUB_API_TOKEN")
             or os.getenv("HUGGINGFACE_API_KEY")
@@ -62,6 +76,6 @@ def get_llm():
 
     raise ValueError(
         "No LLM provider could be initialized. "
-        "Set GEMINI_API_KEY or HF_TOKEN in the environment."
+        "Set GROQ_API_KEY, GEMINI_API_KEY, or HF_TOKEN in the environment."
     )
 

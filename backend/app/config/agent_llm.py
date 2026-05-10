@@ -7,11 +7,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Default HuggingFace model — MUST be open-access (no gating).
 #
-# microsoft/Phi-3-mini-4k-instruct  –  3.8B params, instruction-tuned,
-# Apache-2.0 license, no access request needed.
+# mistralai/Mistral-7B-Instruct-v0.3 supports text-generation.
 # Override at runtime via the HUGGINGFACE_MODEL env var.
 # ---------------------------------------------------------------------------
-DEFAULT_HF_MODEL = "microsoft/Phi-3-mini-4k-instruct"
+DEFAULT_HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub")
 
 
 class FallbackLLM:
@@ -78,13 +80,14 @@ def get_agent_llm(model_name: str | None = None):
     """Return the best available LLM for CrewAI agents.
 
     Resolution order:
-      1. HuggingFace (if token present)
-      2. Gemini
-      3. OpenAI
-      4. FallbackLLM (offline placeholder)
+      1. Groq (if GROQ_API_KEY present)
+      2. HuggingFace (if token present)
+      3. Gemini
+      4. OpenAI
+      5. FallbackLLM (offline placeholder)
 
     The result is cached as a singleton so all agents share the same
-    LLM instance, avoiding repeated HF token login warnings.
+    LLM instance, avoiding repeated initialisations.
 
     Args:
         model_name: Optional HuggingFace model repo ID. Falls back to
@@ -97,7 +100,27 @@ def get_agent_llm(model_name: str | None = None):
     model_name = model_name or os.getenv("HUGGINGFACE_MODEL", DEFAULT_HF_MODEL)
     hf_token = _get_hf_token()
 
-    # --- 1. HuggingFace ---------------------------------------------------
+    # --- 1. Groq ----------------------------------------------------------
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        try:
+            from langchain_groq import ChatGroq
+
+            model_name = os.getenv("GROQ_MODEL", "llama-3.2-3b-preview")
+            llm = ChatGroq(
+                groq_api_key=groq_key,
+                model_name=model_name,
+                temperature=0.7,
+            )
+            logger.info("Agent LLM initialised: Groq (%s)", model_name)
+            _cached_llm = llm
+            return llm
+        except Exception as e:
+            if "groq" not in _warned:
+                logger.warning("Groq LLM init failed: %s", e)
+                _warned.add("groq")
+
+    # --- 2. HuggingFace ---------------------------------------------------
     if hf_token:
         try:
             from langchain_huggingface import HuggingFaceEndpoint
@@ -129,7 +152,7 @@ def get_agent_llm(model_name: str | None = None):
                     logger.warning("HuggingFace LLM init failed: %s", e)
                     _warned.add("hf_init")
 
-    # --- 2. Gemini --------------------------------------------------------
+    # --- 3. Gemini --------------------------------------------------------
     gemini_key = os.getenv("GEMINI_API_KEY")
     if gemini_key:
         try:
@@ -148,7 +171,7 @@ def get_agent_llm(model_name: str | None = None):
                 logger.warning("Gemini LLM init failed: %s", e)
                 _warned.add("gemini")
 
-    # --- 3. OpenAI --------------------------------------------------------
+    # --- 4. OpenAI --------------------------------------------------------
     openai_key = os.getenv("OPENAI_API_KEY")
     if openai_key:
         try:
@@ -163,11 +186,11 @@ def get_agent_llm(model_name: str | None = None):
                 logger.warning("OpenAI LLM init failed: %s", e)
                 _warned.add("openai")
 
-    # --- 4. Fallback (no external provider) --------------------------------
+    # --- 5. Fallback (no external provider) --------------------------------
     if "fallback" not in _warned:
         logger.warning(
             "No LLM provider available — agents will use FallbackLLM "
-            "(static responses). Set GEMINI_API_KEY, HF_TOKEN, or "
+            "(static responses). Set GROQ_API_KEY, HF_TOKEN, GEMINI_API_KEY, or "
             "OPENAI_API_KEY in the environment."
         )
         _warned.add("fallback")
