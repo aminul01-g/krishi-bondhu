@@ -25,7 +25,7 @@ def get_llm():
 
                 return ChatGroq(
                     groq_api_key=groq_api_key,
-                    model_name=os.getenv("GROQ_MODEL", "llama-3.2-3b-preview"),
+                    model_name=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
                     temperature=0.7,
                 )
             except Exception as e:

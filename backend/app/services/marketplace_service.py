@@ -189,8 +189,10 @@ async def scan_product(
     await session.commit()
     await session.refresh(scan)
 
+    scan_id_val = str(scan.id) if getattr(scan, "id", None) else uuid.uuid4().hex
+
     return {
-        "scan_id": str(scan.id),
+        "scan_id": scan_id_val,
         "verification_result": verification_result,
         "confidence_score": confidence_score,
         "verified_product_id": str(verified_product_id) if verified_product_id else None,

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
 
 import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="groq")
 warnings.filterwarnings("ignore", category=FutureWarning, module="huggingface_hub")
 
 
@@ -106,7 +107,7 @@ def get_agent_llm(model_name: str | None = None):
         try:
             from langchain_groq import ChatGroq
 
-            model_name = os.getenv("GROQ_MODEL", "llama-3.2-3b-preview")
+            model_name = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
             llm = ChatGroq(
                 groq_api_key=groq_key,
                 model_name=model_name,

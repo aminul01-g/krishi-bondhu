@@ -87,6 +87,10 @@ async def get_insurance_quote(
     try:
         user_id = current_user.external_id
 
+        if not request.crop or not request.crop.strip():
+            logger.warning(f"Insurance quote requested without valid crop by user {user_id}")
+            raise HTTPException(status_code=400, detail="The 'crop' field is required.")
+
         # Get the structured quote from service
         quote_data = finance_service.get_insurance_quote(request.crop, request.land_size)
 

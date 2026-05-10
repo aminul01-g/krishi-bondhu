@@ -236,7 +236,17 @@ class WeatherService:
         """
         weather = await self.get_weather_data(lat, lon)
         ra = weather.get("solar_radiation", 15.0)
-        et0 = self.calculate_et0(weather["temp_max"], weather["temp_min"], ra)
+        
+        # Robust fallbacks for missing weather data
+        t_max = weather.get("temp_max", 30.0)
+        t_min = weather.get("temp_min", 20.0)
+        rainfall = weather.get("rainfall_mm", 0.0)
+
+        try:
+            et0 = self.calculate_et0(t_max, t_min, ra)
+        except Exception as exc:
+            logger.warning(f"ET0 calculation failed: {exc}. Using default et0_mm_day=5.0")
+            et0 = 5.0
 
         # Crop coefficient (Kc)
         crop_key = crop.lower().strip()
@@ -249,7 +259,6 @@ class WeatherService:
         awc = root_depth * 0.15  # mm
 
         # Soil water balance
-        rainfall = weather["rainfall_mm"]
         new_depletion = previous_depletion_mm + crop_et - rainfall
         new_depletion = max(0.0, min(new_depletion, awc))  # clamp [0, AWC]
 
