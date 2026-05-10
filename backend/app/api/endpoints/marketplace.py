@@ -147,6 +147,12 @@ async def verify_product(
 
         ai_verdict = await asyncio.to_thread(crew.kickoff, inputs=inputs)
 
+        import uuid
+        scan_id = scan_result.get("scan_id")
+        if not scan_id:
+            scan_id = str(uuid.uuid4())
+            scan_result["scan_id"] = scan_id
+
         return {
             "scan_result": scan_result,
             "ai_verdict": str(ai_verdict)

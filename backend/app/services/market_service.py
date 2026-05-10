@@ -20,7 +20,12 @@ class MarketService:
     Implements Redis caching and Prophet-based forecasting with pre-trained models.
     """
     def __init__(self):
-        self.redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+        try:
+            self.redis = Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+            self.redis.ping()
+        except Exception as e:
+            logger.warning(f"Redis unavailable in MarketService: {e}")
+            self.redis = None
         self.models_dir = "backend/models"
         self._model_cache = {}
 
@@ -56,9 +61,13 @@ class MarketService:
         cache_key = f"market:{crop}:{lat}:{lon}"
 
         # 1. Try Redis Cache
-        cached_data = self.redis.get(cache_key)
-        if cached_data:
-            return json.loads(cached_data)
+        if self.redis:
+            try:
+                cached_data = self.redis.get(cache_key)
+                if cached_data:
+                    return json.loads(cached_data)
+            except Exception as e:
+                logger.warning(f"Redis read failed: {e}")
 
         # 2. Simulation logic (Real API integration point)
         mandis = ["Karwan Bazar, Dhaka", "Shyam Bazar, Dhaka", "Rajshahi Sadar Mandi", "Khulna Boro Bazar", "Bogura Mohasthan Hat"]
@@ -86,7 +95,11 @@ class MarketService:
         }
 
         # 3. Cache results for 1 hour
-        self.redis.setex(cache_key, 3600, json.dumps(result))
+        if self.redis:
+            try:
+                self.redis.setex(cache_key, 3600, json.dumps(result))
+            except Exception as e:
+                logger.warning(f"Redis write failed: {e}")
 
         return result
 

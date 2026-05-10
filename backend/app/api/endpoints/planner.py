@@ -71,6 +71,8 @@ async def create_season_plan(
             "ai_strategy": str(ai_strategy)
         }
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Planner generation failed")
         raise HTTPException(status_code=500, detail=f"Failed to generate plan: {str(e)}")
 
 @router.get("/my-plans")

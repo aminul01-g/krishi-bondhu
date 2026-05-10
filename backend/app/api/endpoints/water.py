@@ -40,6 +40,9 @@ async def get_irrigation_advice(
             lon=request.lon
         )
 
+        if "et0_mm_day" not in water_balance:
+            water_balance["et0_mm_day"] = 5.0
+            
         # Use the crew to turn the technical balance into a helpful Bengali/English response
         from crewai import Task
         from app.agents.water_advisor import water_advisor

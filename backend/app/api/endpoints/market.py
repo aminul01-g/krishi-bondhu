@@ -70,7 +70,7 @@ async def get_market_advice(
                 "trend": prediction.get("trend")
             })
         except Exception as e:
-            logger.warning(f"Failed to persist market prices: {e}")
+            logger.warning(f"Failed to persist market prices (db/redis error): {e}")
 
         return MarketAdviceResponse(
             crop=crop,

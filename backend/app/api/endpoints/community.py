@@ -76,6 +76,8 @@ async def submit_question(
         )
         return {"id": str(question.id), "status": question.status, "ai_insights": str(ai_metadata)}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Community question submission failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/questions")
@@ -89,6 +91,8 @@ async def list_questions(
             return await search_community_questions(db, query, limit=limit)
         return await get_recent_questions(db, limit=limit)
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Listing community questions failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/questions/{question_id}")
@@ -112,6 +116,8 @@ async def answer_question(question_id: str, payload: CommunityAnswerCreate, db: 
         )
         return {"id": str(answer.id), "question_id": str(answer.question_id)}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Answering community question failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/answers/{answer_id}/upvote")
@@ -149,4 +155,6 @@ async def escalate_question_endpoint(question_id: str, payload: EscalateRequest,
         escalation = await escalate_question(db, question_id, payload.lat, payload.lon)
         return {"escalation_id": str(escalation.id), "status": escalation.status, "ai_summary": str(summary_text)}
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Escalating question failed")
         raise HTTPException(status_code=500, detail=str(e))

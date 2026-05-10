@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
@@ -19,8 +19,8 @@ class SubsidyRequest(BaseModel):
     land_size: float = 0.0
 
 class InsuranceQuoteRequest(BaseModel):
-    crop: str
-    land_size: float
+    crop: str = Field(..., min_length=1, description="Name of the crop")
+    land_size: float = Field(..., gt=0)
 
 @router.post("/schemes", response_model=dict)
 async def get_subsidy_schemes(

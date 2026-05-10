@@ -59,7 +59,12 @@ async def add_diary_entry(
         json_str = str(result_str).replace("```json", "").replace("```", "").strip()
 
         try:
-            extracted = json.loads(json_str)
+            import re
+            match = re.search(r'\{.*\}', json_str, re.DOTALL)
+            if match:
+                extracted = json.loads(match.group())
+            else:
+                extracted = json.loads(json_str)
         except json.JSONDecodeError:
             logger.warning(f"Failed to parse diary agent output: {json_str}")
             raise HTTPException(status_code=400, detail="Could not extract structured data from input. Please try again.")
