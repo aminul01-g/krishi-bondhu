@@ -133,6 +133,16 @@ class AgentLLMAdapter:
     async def ainvoke(self, *args: Any, **kwargs: Any) -> str:
         return await self.acall(*args, **kwargs)
 
+    def bind(self, *args: Any, **kwargs: Any):
+        """Return a bound LLM compatible with CrewAI's executor setup."""
+        if hasattr(self.provider, "bind"):
+            bound_provider = self.provider.bind(*args, **kwargs)
+            return self.__class__(bound_provider, model_name=self.model)
+        return self
+
+    def __call__(self, *args: Any, **kwargs: Any):
+        return self.call(*args, **kwargs)
+
 
 def _get_hf_token() -> str | None:
     return (
