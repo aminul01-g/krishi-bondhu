@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, func
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, func, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -116,6 +116,19 @@ class AsyncTask(Base):
     task_type = Column(String) # 'chat_analysis', 'satellite_scan'
     status = Column(String, default='pending') # 'pending', 'processing', 'completed', 'failed'
     result = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class FarmerProfile(Base):
+    __tablename__ = "farmer_profiles"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    district = Column(String, nullable=True)
+    upazila = Column(String, nullable=True)
+    crops = Column(JSON, nullable=True)
+    land_area_bigha = Column(Float, nullable=True)
+    farming_experience_years = Column(Integer, nullable=True)
+    phone_number = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
