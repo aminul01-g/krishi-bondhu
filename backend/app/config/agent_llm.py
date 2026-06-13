@@ -111,10 +111,54 @@ class AgentLLMAdapter:
         )
 
     def _generate(self, prompt: str) -> str:
-        if hasattr(self.provider, "generate_content"):
-            return self.provider.generate_content(prompt)
-        if callable(self.provider):
-            return self.provider(prompt)
+        # Try a direct provider call first. If we hit a rate / token limit
+        # error, attempt progressive truncation + exponential backoff retries.
+        try:
+            if hasattr(self.provider, "generate_content"):
+                return self.provider.generate_content(prompt)
+            if callable(self.provider):
+                return self.provider(prompt)
+        except Exception as e:
+            err = str(e).lower()
+            if not any(k in err for k in ("rate_limit", "rate limit", "too large", "tokens", "413")):
+                raise
+
+            # Progressive retry strategy: reduce prompt size and retry
+            from time import sleep
+
+            try:
+                # local import to avoid circular imports at module load
+                from app.llm import token_utils
+            except Exception:
+                token_utils = None
+
+            max_retries = int(os.getenv("LLM_RATE_RETRIES", "3"))
+            backoff_base = float(os.getenv("LLM_BACKOFF_BASE", "2.0"))
+            # If token utilities available, compute tokens and reduce by 30% each retry
+            for attempt in range(1, max_retries + 1):
+                # determine new prompt
+                if token_utils:
+                    try:
+                        current_tokens = token_utils.estimate_tokens(prompt, model=getattr(self, "model", None))
+                        new_max = max(32, int(current_tokens * (0.7 ** attempt)))
+                        truncated = token_utils.truncate_by_tokens(prompt, new_max, model=getattr(self, "model", None))
+                    except Exception:
+                        truncated = prompt[: max(1, int(len(prompt) * (0.7 ** attempt)))]
+                else:
+                    truncated = prompt[: max(1, int(len(prompt) * (0.7 ** attempt)))]
+
+                try:
+                    if hasattr(self.provider, "generate_content"):
+                        return self.provider.generate_content(truncated)
+                    if callable(self.provider):
+                        return self.provider(truncated)
+                except Exception as e2:
+                    err2 = str(e2).lower()
+                    # If this last attempt failed, re-raise the error
+                    if attempt == max_retries or not any(k in err2 for k in ("rate_limit", "rate limit", "too large", "tokens", "413")):
+                        raise
+                    sleep(backoff_base ** attempt)
+
         raise RuntimeError("LLM provider does not support generate_content or callable invocation.")
 
     def call(
