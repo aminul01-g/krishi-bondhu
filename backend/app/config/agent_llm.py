@@ -174,9 +174,18 @@ class AgentLLMAdapter:
                 # determine new prompt
                 if token_utils:
                     try:
-                        current_tokens = token_utils.estimate_tokens(prompt, model=getattr(self, "model", None))
+                        # Preserve any leading system instruction when truncating by tokens
+                        header = ""
+                        body = prompt
+                        if prompt.startswith("System:") and "\n\n" in prompt:
+                            parts = prompt.split("\n\n", 1)
+                            header = parts[0] + "\n\n"
+                            body = parts[1]
+
+                        current_tokens = token_utils.estimate_tokens(body, model=getattr(self, "model", None))
                         new_max = max(32, int(current_tokens * (0.7 ** attempt)))
-                        truncated = token_utils.truncate_by_tokens(prompt, new_max, model=getattr(self, "model", None))
+                        truncated_body = token_utils.truncate_by_tokens(body, new_max, model=getattr(self, "model", None))
+                        truncated = header + truncated_body
                     except Exception:
                         truncated = prompt[: max(1, int(len(prompt) * (0.7 ** attempt)))]
                 else:
