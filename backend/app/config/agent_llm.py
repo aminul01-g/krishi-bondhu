@@ -87,7 +87,28 @@ class AgentLLMAdapter:
             role = message.get("role", "user")
             content = message.get("content", "")
             prompt_parts.append(f"{role.title()}: {content}")
-        return "\n".join(prompt_parts)
+
+        prompt = "\n".join(prompt_parts)
+        return self._truncate_prompt(prompt)
+
+    def _truncate_prompt(self, prompt: str, max_chars: int = 20000) -> str:
+        if len(prompt) <= max_chars:
+            return prompt
+
+        truncated = prompt[-max_chars:]
+        if "\n" in truncated:
+            truncated = truncated[truncated.index("\n") + 1 :]
+
+        logger.warning(
+            "Conversation prompt exceeded %d chars and was truncated to %d chars. "
+            "This helps avoid provider request limits.",
+            max_chars,
+            len(truncated),
+        )
+        return (
+            "NOTE: The conversation was truncated to fit the model's request limits. "
+            "Only the latest context is included.\n\n" + truncated
+        )
 
     def _generate(self, prompt: str) -> str:
         if hasattr(self.provider, "generate_content"):
