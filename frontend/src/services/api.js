@@ -22,6 +22,11 @@ async function request(method, path, { body, isForm = false, signal } = {}) {
 
   const res = await fetch(url, config);
   if (!res.ok) {
+    if (res.status === 401) {
+      localStorage.removeItem('kb_auth_token');
+      window.dispatchEvent(new Event('kb_auth_unauthorized'));
+    }
+
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     let errorMsg = err.error || `API Error ${res.status}`;
     if (Array.isArray(err.detail)) {
@@ -43,17 +48,11 @@ async function request(method, path, { body, isForm = false, signal } = {}) {
 export const register = (username, password) =>
   request('POST', `/api/auth/register`, { body: { username, password } });
 
-export const login = async (username, password) => {
+export const login = (username, password) => {
   const form = new URLSearchParams();
   form.append('username', username);
   form.append('password', password);
-  const res = await fetch(`${API_BASE}/api/auth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form,
-  });
-  if (!res.ok) throw new Error('Login failed');
-  return res.json();
+  return request('POST', '/api/auth/token', { body: form, isForm: true });
 };
 
 export const getMe = (signal) => request('GET', '/api/auth/me', { signal });

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import librosa
 import soundfile as sf
 from app.core.prompts import GEMINI_TRANSCRIPTION_PROMPT
-from app.config.model_config import model_registry
+from app.llm.provider import init_stt_pipeline
 
 load_dotenv()
 
@@ -211,7 +211,7 @@ def transcribe_with_local_whisper(audio_path: str) -> dict:
     print(f"Transcribing with Local Hugging Face Whisper model...")
     try:
         # Load local pipeline
-        stt_pipeline = model_registry.get_stt_model()
+        stt_pipeline = init_stt_pipeline()
         
         # Whisper requires EXACTLY 16000 Hz. We use librosa to load and resample safely.
         audio_array, sampling_rate = librosa.load(audio_path, sr=16000)

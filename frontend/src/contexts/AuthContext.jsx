@@ -18,6 +18,33 @@ export function AuthProvider({ children }) {
     return () => ctrl.abort();
   }, [token]);
 
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === 'kb_auth_token') {
+        if (!event.newValue) {
+          setToken(null);
+          setUser(null);
+        } else {
+          setToken(event.newValue);
+        }
+      }
+    };
+
+    const handleUnauthorized = () => {
+      localStorage.removeItem('kb_auth_token');
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('kb_auth_unauthorized', handleUnauthorized);
+
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('kb_auth_unauthorized', handleUnauthorized);
+    };
+  }, []);
+
   const loginUser = (accessToken) => {
     localStorage.setItem('kb_auth_token', accessToken);
     setToken(accessToken);

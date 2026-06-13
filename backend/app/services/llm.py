@@ -3,12 +3,13 @@ import os
 import json
 from dotenv import load_dotenv
 from app.core.prompts import (
-    INTENT_EXTRACTION_SYSTEM_INSTRUCTION, 
-    REASONING_VOICE_INSTRUCTION, 
-    REASONING_IMAGE_INSTRUCTION, 
-    REASONING_CHAT_INSTRUCTION
+    INTENT_EXTRACTION_SYSTEM_INSTRUCTION,
+    REASONING_VOICE_INSTRUCTION,
+    REASONING_IMAGE_INSTRUCTION,
+    REASONING_CHAT_INSTRUCTION,
 )
 from app.services.audio import detect_language_from_text
+from app.llm import init_llm_provider
 
 load_dotenv()
 
@@ -81,29 +82,14 @@ def call_huggingface_llm(prompt: str, system_instruction: str = None) -> str:
 
 
 def call_llm(prompt: str, system_instruction: str = None) -> str:
-    """Wrapper to call the configured LLM provider"""
-    if LLM_PROVIDER == "huggingface":
-        try:
-            return call_huggingface_llm(prompt, system_instruction)
-        except Exception as e:
-            print(f"[WARN] Hugging Face failed, trying Gemini fallback: {e}")
-            if GEMINI_API_KEY:
-                return call_gemini_llm(prompt, system_instruction)
-            else:
-                return get_fallback_response(prompt, system_instruction)
-    elif LLM_PROVIDER == "gemini":
-        try:
-            return call_gemini_llm(prompt, system_instruction)
-        except Exception as e:
-            print(f"[WARN] Gemini failed: {e}")
-            return get_fallback_response(prompt, system_instruction)
-    else:
-        # Default to Gemini, then fallback
-        try:
-            return call_gemini_llm(prompt, system_instruction)
-        except Exception as e:
-            print(f"[WARN] Default LLM failed: {e}")
-            return get_fallback_response(prompt, system_instruction)
+    """Wrapper to call the configured LLM provider."""
+    try:
+        llm_provider = init_llm_provider()
+        full_prompt = f"{system_instruction}\n\n{prompt}" if system_instruction else prompt
+        return llm_provider.generate_content(full_prompt)
+    except Exception as e:
+        print(f"[WARN] Shared LLM provider failed: {e}")
+        return get_fallback_response(prompt, system_instruction)
 
 def get_fallback_response(prompt: str, system_instruction: str = None) -> str:
     """Provide basic fallback responses when LLM is not available"""

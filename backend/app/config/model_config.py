@@ -1,25 +1,55 @@
 import os
 import logging
-# import torch  # Temporarily commented out
-# from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig  # Lazy import
-# from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline  # Lazy import
-# from langchain_groq import ChatGroq  # Lazy import
 
 logger = logging.getLogger("ModelConfig")
 
 class ModelRegistry:
     def __init__(self):
-        # Lazy imports to avoid circular dependencies
-        # self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # self.is_basic_space = os.getenv("SPACE_HARDWARE", "").startswith("cpu") or not torch.cuda.is_available()
-        
-        # 4-bit Quantization Config for heavy LLMs (requires bitsandbytes)
-        # self.bnb_config = BitsAndBytesConfig(
-        #     load_in_4bit=True,
-        #     bnb_4bit_compute_dtype=torch.float16,
-        #     bnb_4bit_use_double_quant=True,
-        #     bnb_4bit_quant_type="nf4"
-        # )
+        # Hardware/device configuration is optional and safe when torch is unavailable.
+        self.device = "cpu"
+        self.is_basic_space = os.getenv("SPACE_HARDWARE", "").startswith("cpu")
+        self.bnb_config = None
+
+        try:
+            import torch
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.is_basic_space = self.is_basic_space or not torch.cuda.is_available()
+            try:
+                from transformers import BitsAndBytesConfig
+                self.bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_quant_type="nf4"
+                )
+            except Exception:
+                self.bnb_config = None
+        except Exception:
+            self.device = "cpu"
+            self.is_basic_space = True
+
+        # Model IDs mapped to environment variables with hardcoded defaults
+        self.MODELS = {
+            "agronomist": {
+                "primary": os.getenv("PRIMARY_LLM_ID", "AI71ai/Llama-agrillm-3.3-70B"),
+                "fallback": os.getenv("FALLBACK_LLM_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+            },
+            "disease_vision": {
+                "primary": os.getenv("VISION_MODEL_ID", "prof-freakenstein/plantnet-disease-detection"),
+                "fallback": "wambugu71/crop_leaf_diseases_vit"
+            },
+            "multimodal_interpreter": {
+                "primary": os.getenv("INTERPRETER_LLM_ID", "md-nishat-008/TigerLLM-1B-it"),
+                "fallback": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            },
+            "voice_stt": {
+                "primary": os.getenv("STT_MODEL_ID", "mozilla-ai/whisper-large-v3-bn"),
+                "fallback": "shhossain/whisper-tiny-bn"
+            }
+        }
+
+        # Cache for loaded models to avoid OOM
+        self._loaded_models = {}
         
         # Model IDs mapped to environment variables with hardcoded defaults
         self.MODELS = {
@@ -59,6 +89,9 @@ class ModelRegistry:
                     return None
             return self._loaded_models["agronomist"]
 
+        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+        from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+
         model_id = self.MODELS["agronomist"]["primary"]
         fallback_id = self.MODELS["agronomist"]["fallback"]
         
@@ -73,16 +106,17 @@ class ModelRegistry:
         try:
             logger.info(f"Attempting to load {model_id}...")
             tokenizer = AutoTokenizer.from_pretrained(model_id)
-            # Only use quantization if CUDA is available, otherwise bitsandbytes will crash
-            if self.device == "cuda":
+            if self.device == "cuda" and self.bnb_config is not None:
                 model = AutoModelForCausalLM.from_pretrained(model_id, quantization_config=self.bnb_config, device_map="auto")
+            elif self.device == "cuda":
+                model = AutoModelForCausalLM.from_pretrained(model_id, device_map="auto", torch_dtype=torch.float16)
             else:
                 model = AutoModelForCausalLM.from_pretrained(model_id, device_map="cpu", torch_dtype=torch.float32)
         except Exception as e:
             logger.warning(f"Failed to load {model_id}: {e}. Falling back to {fallback_id}")
             tokenizer = AutoTokenizer.from_pretrained(fallback_id)
             model = AutoModelForCausalLM.from_pretrained(
-                fallback_id, 
+                fallback_id,
                 device_map="cpu" if self.device == "cpu" else "auto",
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
             )
@@ -94,6 +128,8 @@ class ModelRegistry:
 
     def get_disease_vision_model(self):
         """Loads the PlantNet disease classification pipeline."""
+        from transformers import pipeline
+
         model_id = self.MODELS["disease_vision"]["primary"]
         
         if "disease_vision" in self._loaded_models:
@@ -125,6 +161,9 @@ class ModelRegistry:
                     return None
             return self._loaded_models["interpreter"]
 
+        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+        from langchain_community.llms.huggingface_pipeline import HuggingFacePipeline
+
         model_id = self.MODELS["multimodal_interpreter"]["primary"]
         
         if "interpreter" in self._loaded_models:
@@ -144,6 +183,8 @@ class ModelRegistry:
 
     def get_stt_model(self):
         """Loads Whisper ASR for Bengali."""
+        from transformers import pipeline
+
         model_id = self.MODELS["voice_stt"]["primary"]
         fallback_id = self.MODELS["voice_stt"]["fallback"]
         

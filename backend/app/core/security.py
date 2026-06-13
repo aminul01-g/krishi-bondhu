@@ -18,10 +18,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Application secrets & JWT config
 # ---------------------------------------------------------------------------
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "krishibondhu_super_secret_key_change_this_in_production",
-)
+DEFAULT_SECRET_KEY = "krishibondhu_super_secret_key_change_this_in_production"
+SECRET_KEY = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
+if SECRET_KEY == DEFAULT_SECRET_KEY:
+    logger.warning(
+        "SECRET_KEY is not configured. Using an insecure default secret. "
+        "Set SECRET_KEY in the environment before deploying to production."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")

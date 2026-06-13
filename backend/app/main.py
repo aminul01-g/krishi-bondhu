@@ -153,7 +153,7 @@ async def save_conversation_to_db(
 ):
     try:
         if not user_db_id:
-            return
+            return None
 
         conv = Conversation(
             user_id=user_db_id,
@@ -164,21 +164,43 @@ async def save_conversation_to_db(
         )
         db.add(conv)
         await db.commit()
-        print(f"[DEBUG] Saved conversation for user_id {user_db_id}")
+        await db.refresh(conv)
+        logger.debug(f"Saved conversation id={conv.id} for user_id={user_db_id}")
 
-        await ws_manager.broadcast({"type": "history_updated", "user_id": user_db_id})
+        try:
+            await ws_manager.broadcast({"type": "history_updated", "user_id": user_db_id})
+        except Exception as broadcast_error:
+            logger.warning("WebSocket broadcast failed", error=str(broadcast_error), user_id=user_db_id)
+
+        return conv.id
     except Exception as e:
         logger.error("Failed to save conversation", error=str(e), user_id=user_db_id)
+        return None
+
+def _parse_allowed_origins() -> list[str]:
+    raw_origins = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost,http://localhost:3000,https://huggingface.co,https://krishibondhu.hf.space"
+    )
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    if "*" in origins:
+        if os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true":
+            logger.warning(
+                "CORS_ALLOW_ORIGINS contains '*', but credentials are allowed. Removing wildcard for security."
+            )
+            origins = [origin for origin in origins if origin != "*"]
+        else:
+            return ["*"]
+    if not origins:
+        logger.warning(
+            "No valid CORS origins configured; falling back to localhost defaults."
+        )
+        origins = ["http://localhost", "http://localhost:3000"]
+    return origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://localhost:3000",
-        "https://huggingface.co",
-        "https://krishibondhu.hf.space",
-        "*"
-    ],
+    allow_origins=_parse_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -404,7 +426,7 @@ async def upload_audio(
                 reply_text = raw_reply
 
         user_db_id = current_user.id
-        await save_conversation_to_db(
+        saved_conv_id = await save_conversation_to_db(
             db,
             user_db_id,
             transcript,
@@ -418,7 +440,7 @@ async def upload_audio(
             db,
             current_user.external_id,
             transcript,
-            conv_id=user_db_id
+            conv_id=saved_conv_id
         )
 
         return JSONResponse({
@@ -468,7 +490,7 @@ async def upload_image(
         reply_text = str(result)
 
         user_db_id = current_user.id
-        await save_conversation_to_db(
+        saved_conv_id = await save_conversation_to_db(
             db,
             user_db_id,
             question,
@@ -481,7 +503,7 @@ async def upload_image(
             db,
             current_user.external_id,
             question,
-            conv_id=user_db_id
+            conv_id=saved_conv_id
         )
 
         return JSONResponse({
@@ -565,7 +587,7 @@ async def chat(
             reply_text = str(result)
 
         user_db_id = current_user.id
-        await save_conversation_to_db(
+        saved_conv_id = await save_conversation_to_db(
             db,
             user_db_id,
             message,
@@ -578,7 +600,7 @@ async def chat(
             db,
             current_user.external_id,
             message,
-            conv_id=user_db_id
+            conv_id=saved_conv_id
         )
 
         return JSONResponse({

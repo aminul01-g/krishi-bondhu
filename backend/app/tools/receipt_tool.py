@@ -2,7 +2,6 @@ import os
 import json
 import logging
 from crewai_tools import BaseTool
-from app.config.model_config import model_registry
 
 logger = logging.getLogger("ReceiptScanner")
 
@@ -20,9 +19,6 @@ class ReceiptScannerTool(BaseTool):
         logger.info(f"Scanning receipt: {image_path}")
         
         try:
-            # We use the vision-capable model to interpret the receipt
-            vision_llm = model_registry.get_interpreter_llm() # Assuming this is vision-capable or we use a fallback
-            
             # In a real implementation, we would send the image to a vision API
             # For now, we simulate the high-fidelity extraction logic
             

@@ -4,7 +4,7 @@ from datetime import datetime
 from app.db import get_db
 from app.services.memory import MemoryService
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 from app.models.db_models import User
 from app.core.dependencies import get_current_user
 
@@ -17,13 +17,13 @@ class MemoryFact(BaseModel):
     confidence: float
     last_updated: str
 
-@router.get("/{user_id}", response_model=Dict[str, List[Dict]])
+@router.get("/", response_model=Dict[str, Any])
 async def get_farm_memory(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Retrieve all stored facts and history for a specific farm/user.
+    Retrieve all stored facts and history for the authenticated farm/user.
     """
     try:
         user_id = current_user.external_id
@@ -77,7 +77,7 @@ async def get_farm_memory(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/{user_id}/{fact_key}")
+@router.delete("/{fact_key}")
 async def delete_memory_fact(
     fact_key: str,
     current_user: User = Depends(get_current_user),

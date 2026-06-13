@@ -1,6 +1,9 @@
+import inspect
 import os
 import logging
 from typing import Any
+
+from app.llm import init_llm_provider
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ class FallbackLLM:
         return (
             "LLM provider is not configured. "
             "Please set HUGGINGFACE_API_KEY or HUGGINGFACEHUB_API_TOKEN, "
-            "GEMINI_API_KEY, or OPENAI_API_KEY in the environment."
+            "GEMINI_API_KEY, ANTHROPIC_API_KEY, COHERE_API_KEY, or OPENAI_API_KEY in the environment."
         )
 
     async def acall(
@@ -62,6 +65,75 @@ class FallbackLLM:
         )
 
 
+class AgentLLMAdapter:
+    """Adapter around a shared LLM provider to expose call/acall semantics."""
+
+    def __init__(self, provider: Any, model_name: str | None = None):
+        self.provider = provider
+        self.model = getattr(provider, "model", model_name or "unknown")
+        self.provider_name = getattr(provider, "provider", getattr(provider, "__class__", type(provider).__name__))
+
+    def _messages_to_prompt(self, messages: str | list[Any]) -> str:
+        if isinstance(messages, str):
+            return messages
+        if isinstance(messages, dict):
+            return str(messages)
+
+        prompt_parts = []
+        for message in messages:
+            if not isinstance(message, dict):
+                prompt_parts.append(str(message))
+                continue
+            role = message.get("role", "user")
+            content = message.get("content", "")
+            prompt_parts.append(f"{role.title()}: {content}")
+        return "\n".join(prompt_parts)
+
+    def _generate(self, prompt: str) -> str:
+        if hasattr(self.provider, "generate_content"):
+            return self.provider.generate_content(prompt)
+        if callable(self.provider):
+            return self.provider(prompt)
+        raise RuntimeError("LLM provider does not support generate_content or callable invocation.")
+
+    def call(
+        self,
+        messages: str | list[Any],
+        tools: list[dict[str, Any]] | None = None,
+        callbacks: list[Any] | None = None,
+        available_functions: dict[str, Any] | None = None,
+        from_task: Any | None = None,
+        from_agent: Any | None = None,
+        response_model: type[Any] | None = None,
+    ) -> str:
+        prompt = self._messages_to_prompt(messages)
+        return self._generate(prompt)
+
+    async def acall(
+        self,
+        messages: str | list[Any],
+        tools: list[dict[str, Any]] | None = None,
+        callbacks: list[Any] | None = None,
+        available_functions: dict[str, Any] | None = None,
+        from_task: Any | None = None,
+        from_agent: Any | None = None,
+        response_model: type[Any] | None = None,
+    ) -> str:
+        prompt = self._messages_to_prompt(messages)
+        if hasattr(self.provider, "acall"):
+            return await self.provider.acall(prompt)
+        result = self._generate(prompt)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    def invoke(self, *args: Any, **kwargs: Any) -> str:
+        return self.call(*args, **kwargs)
+
+    async def ainvoke(self, *args: Any, **kwargs: Any) -> str:
+        return await self.acall(*args, **kwargs)
+
+
 def _get_hf_token() -> str | None:
     return (
         os.getenv("HUGGINGFACEHUB_API_TOKEN")
@@ -80,13 +152,6 @@ _cached_llm: Any = None
 def get_agent_llm(model_name: str | None = None):
     """Return the best available LLM for CrewAI agents.
 
-    Resolution order:
-      1. Groq (if GROQ_API_KEY present)
-      2. HuggingFace (if token present)
-      3. Gemini
-      4. OpenAI
-      5. FallbackLLM (offline placeholder)
-
     The result is cached as a singleton so all agents share the same
     LLM instance, avoiding repeated initialisations.
 
@@ -99,6 +164,18 @@ def get_agent_llm(model_name: str | None = None):
         return _cached_llm
 
     model_name = model_name or os.getenv("HUGGINGFACE_MODEL", DEFAULT_HF_MODEL)
+    try:
+        provider = init_llm_provider()
+        llm = AgentLLMAdapter(provider, model_name=model_name)
+        logger.info("Agent LLM initialised from shared provider: %s", provider.get_model_name())
+        _cached_llm = llm
+        return llm
+    except Exception as e:
+        if "shared_llm" not in _warned:
+            logger.warning("Shared LLM provider init failed: %s. Falling back to legacy provider.", e)
+            _warned.add("shared_llm")
+
+    # --- Legacy compatibility path --------------------------------------
     hf_token = _get_hf_token()
 
     # --- 1. Groq ----------------------------------------------------------
@@ -137,7 +214,6 @@ def get_agent_llm(model_name: str | None = None):
             return llm
         except Exception as e:
             err_str = str(e)
-            # Detect gated-model error specifically
             if "gated repo" in err_str.lower() or "restricted" in err_str.lower():
                 if "hf_gated" not in _warned:
                     logger.warning(
@@ -187,7 +263,6 @@ def get_agent_llm(model_name: str | None = None):
                 logger.warning("OpenAI LLM init failed: %s", e)
                 _warned.add("openai")
 
-    # --- 5. Fallback (no external provider) --------------------------------
     if "fallback" not in _warned:
         logger.warning(
             "No LLM provider available — agents will use FallbackLLM "
