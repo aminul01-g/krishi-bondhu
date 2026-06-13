@@ -12,17 +12,21 @@ export default function DiaryPage() {
   const [input, setInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
 
   const handleAddEntry = async () => {
     if (!input.trim()) return;
     setSubmitting(true);
     setSuccess('');
+    setError('');
     try {
       const res = await postDiaryEntry(input.trim());
       setSuccess(res.message);
       setInput('');
       refetch();
-    } catch { /* handled by UI */ }
+    } catch (err) {
+      setError('Could not save entry. Please try again.');
+    }
     finally { setSubmitting(false); }
   };
 
@@ -35,11 +39,20 @@ export default function DiaryPage() {
       a.download = 'KrishiBondhu_Report.pdf';
       a.click();
       URL.revokeObjectURL(url);
-    } catch { /* silent */ }
+    } catch (err) {
+      setError('PDF generation failed.');
+    }
   };
 
   return (
     <div className="space-y-4">
+      {/* Error alert */}
+      {error && (
+        <div className="bg-danger-light text-danger p-4 rounded-card text-sm text-center font-semibold">
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* P&L summary */}
       {reportLoading ? (
         <div className="card"><Skeleton lines={3} /></div>

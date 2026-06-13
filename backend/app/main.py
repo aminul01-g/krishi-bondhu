@@ -7,7 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import os
 import uuid
 import asyncio
+import traceback
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
@@ -46,6 +50,11 @@ import structlog
 logger = get_logger("main")
 
 app = FastAPI(title="KrishiBondhu API")
+
+# --- Rate Limiting ---
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- Global Error Handling ---
 
@@ -346,6 +355,7 @@ async def websocket_endpoint(websocket: WebSocket):
         ws_manager.disconnect(websocket)
 
 @app.post('/api/upload_audio')
+@limiter.limit("10/minute")
 async def upload_audio(
     request: Request,
     file: UploadFile = File(...),
@@ -455,9 +465,11 @@ async def upload_audio(
             "gps": initial_state["gps"]
         })
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
+        return JSONResponse({"error": "Something went wrong. Please try again.", "code": "AGENT_ERROR"}, status_code=500)
 
 @app.post('/api/upload_image')
+@limiter.limit("10/minute")
 async def upload_image(
     request: Request,
     image: UploadFile = File(...),
@@ -521,9 +533,11 @@ async def upload_image(
             "gps": initial_state["gps"]
         })
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
+        return JSONResponse({"error": "Something went wrong. Please try again.", "code": "AGENT_ERROR"}, status_code=500)
 
 @app.post('/api/chat')
+@limiter.limit("20/minute")
 async def chat(
     request: Request,
     message: str = Form(...),
@@ -621,7 +635,8 @@ async def chat(
             "gps": initial_state["gps"]
         })
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
+        return JSONResponse({"error": "Something went wrong. Please try again.", "code": "AGENT_ERROR"}, status_code=500)
 
 @app.get('/api/get_tts')
 async def get_tts(path: str):

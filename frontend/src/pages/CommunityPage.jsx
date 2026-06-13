@@ -16,22 +16,33 @@ export default function CommunityPage() {
   const [qText, setQText] = useState('');
   const [qCrop, setQCrop] = useState('Rice');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   const handleAsk = async () => {
     if (!qText.trim()) return;
     setSubmitting(true);
+    setError('');
     try {
       await postCommunityQuestion({
         question_text: qText, crop_type: qCrop,
         growth_stage: null, lat: lat || 23.81, lon: lon || 90.41,
       });
       setQText(''); setShowForm(false); refetch();
-    } catch { /* handled */ }
+    } catch (err) {
+      setError('Failed to post question. Please try again.');
+    }
     finally { setSubmitting(false); }
   };
 
   return (
     <div className="space-y-4">
+      {/* Error alert */}
+      {error && (
+        <div className="bg-danger-light text-danger p-4 rounded-card text-sm text-center font-semibold">
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* Search */}
       <div className="flex gap-2">
         <input value={search} onChange={(e) => setSearch(e.target.value)}

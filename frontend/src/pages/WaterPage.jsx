@@ -10,18 +10,29 @@ export default function WaterPage() {
   const [crop, setCrop] = useState('Rice');
   const [advice, setAdvice] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchAdvice = async () => {
     setLoading(true);
+    setError('');
     try {
       const data = await postWaterAdvice(lat || 23.81, lon || 90.41, crop);
       setAdvice(data);
-    } catch { /* handled */ }
+    } catch (err) {
+      setError('Unable to get irrigation advice. Check your connection.');
+    }
     finally { setLoading(false); }
   };
 
   return (
     <div className="space-y-4">
+      {/* Error alert */}
+      {error && (
+        <div className="bg-danger-light text-danger p-4 rounded-card text-sm text-center font-semibold">
+          ⚠️ {error}
+        </div>
+      )}
+
       <div className="card flex items-center gap-2">
         <select value={crop} onChange={(e) => setCrop(e.target.value)} className="input-field flex-1 !py-2">
           {['Rice', 'Wheat', 'Potato', 'Maize', 'Jute'].map((c) => (

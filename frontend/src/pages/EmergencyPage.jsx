@@ -15,6 +15,7 @@ export default function EmergencyPage() {
   const [photos, setPhotos] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
   const fileRef = useRef(null);
 
   const handlePhotoCapture = (e) => {
@@ -24,6 +25,7 @@ export default function EmergencyPage() {
 
   const handleSubmit = async () => {
     setSubmitting(true);
+    setError('');
     try {
       const imageData = [];
       for (const photo of photos) {
@@ -42,7 +44,20 @@ export default function EmergencyPage() {
       });
       setResult(res);
       setStep('done');
-    } catch { /* handled */ }
+    } catch (err) {
+      const pendingReport = {
+        crop_type: cropType,
+        damage_cause: damageCause,
+        damage_estimate_percent: damagePercent,
+        yield_loss_estimate_percent: damagePercent,
+        lat: lat || 23.81,
+        lon: lon || 90.41,
+        voice_statement_transcribed: voiceText,
+        image_data: photos.map(p => URL.createObjectURL(p))
+      };
+      localStorage.setItem('kb_pending_emergency', JSON.stringify(pendingReport));
+      setError('Report submission failed. Please try again or call 16123.');
+    }
     finally { setSubmitting(false); }
   };
 
@@ -53,6 +68,13 @@ export default function EmergencyPage() {
 
   return (
     <div className="space-y-4">
+      {/* Error alert */}
+      {error && (
+        <div className="bg-danger text-white p-4 rounded-card text-sm text-center font-semibold">
+          🚨 {error}
+        </div>
+      )}
+
       {/* Helpline button */}
       <button onClick={callHelpline}
         className="w-full bg-danger text-white font-bold py-4 rounded-card shadow-elevated

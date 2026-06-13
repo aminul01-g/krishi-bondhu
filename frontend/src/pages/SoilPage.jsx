@@ -10,6 +10,7 @@ export default function SoilPage() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [error, setError] = useState('');
   const fileRef = useRef(null);
 
   const handleCapture = async (e) => {
@@ -17,15 +18,25 @@ export default function SoilPage() {
     if (!file) return;
     setPreview(URL.createObjectURL(file));
     setLoading(true);
+    setError('');
     try {
       const data = await postSoilImage(file, lat, lon);
       setResult(data);
-    } catch { setResult({ analysis: 'Failed to analyze. Try again.' }); }
+    } catch (err) {
+      setError('Failed to analyze soil image. Please try again.');
+    }
     finally { setLoading(false); }
   };
 
   return (
     <div className="space-y-4">
+      {/* Error alert */}
+      {error && (
+        <div className="bg-danger-light text-danger p-4 rounded-card text-sm text-center font-semibold">
+          ⚠️ {error}
+        </div>
+      )}
+
       <div className="card-elevated text-center">
         <h3 className="font-semibold text-primary mb-3">🔬 {t('nav.soil')}</h3>
         <button onClick={() => fileRef.current?.click()}

@@ -5,6 +5,7 @@ pydantic==2.13.3
 pydantic-settings==2.14.0
 python-multipart==0.0.27
 httpx==0.28.1
+slowapi>=0.1.9
 
 # Database & Async
 sqlalchemy[asyncio]==2.0.49
