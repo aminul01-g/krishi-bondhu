@@ -312,6 +312,11 @@ class GroqProvider(BaseLLMProvider):
             full_prompt = prompt
             if system_instruction:
                 full_prompt = f"{system_instruction}\n\n{prompt}"
+
+            if hasattr(self.client, "predict"):
+                return self.client.predict(full_prompt)
+            if hasattr(self.client, "call"):
+                return self.client.call(full_prompt)
             return self.client(full_prompt)
         except Exception as e:
             logger.error(f"Groq error: {e}")
