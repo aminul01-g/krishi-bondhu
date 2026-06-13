@@ -345,6 +345,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.post('/api/upload_audio')
 async def upload_audio(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     lat: float = Form(None),
@@ -381,8 +382,10 @@ async def upload_audio(
             "unclear_audio": True
         }, status_code=200)
 
+    # Allow frontend to override detected language via header
+    header_lang = request.headers.get('x-kb-lang')
     initial_state["transcript"] = transcript
-    initial_state["language"] = language
+    initial_state["language"] = header_lang or language
 
     try:
         # Use the new Crew-based logic
@@ -454,6 +457,7 @@ async def upload_audio(
 
 @app.post('/api/upload_image')
 async def upload_image(
+    request: Request,
     image: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     lat: float = Form(None),
@@ -465,12 +469,14 @@ async def upload_image(
     image_path = await save_image_local(image)
     detected_language = detect_language_from_text(question) if question else "en"
 
+    header_lang = request.headers.get('x-kb-lang')
+
     initial_state = {
         "user_id": current_user.external_id,
         "gps": {"lat": lat, "lon": lon},
         "image_path": image_path,
         "transcript": question,
-        "language": detected_language,
+        "language": header_lang or detected_language,
     }
     try:
         from app.crews.krishi_crew import KrishiCrew
@@ -517,6 +523,7 @@ async def upload_image(
 
 @app.post('/api/chat')
 async def chat(
+    request: Request,
     message: str = Form(...),
     current_user: User = Depends(get_current_user),
     lat: float = Form(None),
@@ -533,7 +540,9 @@ async def chat(
     if image:
         image_path = await save_image_local(image)
 
-    detected_language = detect_language_from_text(message)
+    # Prefer language set by frontend (UI toggle), fall back to auto-detection
+    header_lang = request.headers.get('x-kb-lang')
+    detected_language = header_lang or detect_language_from_text(message)
 
     messages = [{"role": "user", "content": message}]
     if include_history and db:

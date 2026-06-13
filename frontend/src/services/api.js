@@ -9,6 +9,9 @@ function getAuthHeaders() {
   const token = localStorage.getItem('kb_auth_token');
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Propagate selected UI language to backend so LLMs can respect it
+  const lang = localStorage.getItem('kb_lang') || 'bn';
+  headers['X-KB-Lang'] = lang;
   return headers;
 }
 
