@@ -77,9 +77,19 @@ class AgentLLMAdapter:
         if isinstance(messages, str):
             return messages
         if isinstance(messages, dict):
+            # If a dict-like initial_state is passed, stringify but keep language if present
             return str(messages)
 
         prompt_parts = []
+        # Detect explicit language in messages (some callers pass a state dict or include language)
+        detected_language = None
+        has_system = False
+        for message in messages:
+            if isinstance(message, dict):
+                if message.get("role") == "system":
+                    has_system = True
+                if detected_language is None and "language" in message:
+                    detected_language = message.get("language")
         for message in messages:
             if not isinstance(message, dict):
                 prompt_parts.append(str(message))
@@ -88,26 +98,51 @@ class AgentLLMAdapter:
             content = message.get("content", "")
             prompt_parts.append(f"{role.title()}: {content}")
 
-        prompt = "\n".join(prompt_parts)
+        prompt_body = "\n".join(prompt_parts)
+
+        # If no explicit system instruction exists but a language was detected, prepend one
+        if not has_system and detected_language in ("bn", "en"):
+            if detected_language == "bn":
+                system_inst = "System: সব উত্তর বাংলায় প্রদান করুন। কৃষক-বান্ধব, সংক্ষিপ্ত ভাষা ব্যবহার করুন।"
+            else:
+                system_inst = "System: Always reply in English. Use concise, farmer-friendly language."
+            prompt = system_inst + "\n\n" + prompt_body
+        else:
+            prompt = prompt_body
+
         return self._truncate_prompt(prompt)
 
     def _truncate_prompt(self, prompt: str, max_chars: int = 20000) -> str:
         if len(prompt) <= max_chars:
             return prompt
+        # Preserve a leading system instruction (everything up to first blank line) when truncating
+        header = ""
+        body = prompt
+        if prompt.startswith("System:") and "\n\n" in prompt:
+            parts = prompt.split("\n\n", 1)
+            header = parts[0] + "\n\n"
+            body = parts[1]
 
-        truncated = prompt[-max_chars:]
-        if "\n" in truncated:
-            truncated = truncated[truncated.index("\n") + 1 :]
+        # If header itself already exceeds the limit, fall back to character-based truncation
+        if len(header) >= max_chars:
+            logger.warning("System instruction alone exceeds max_chars; truncating header.")
+            return prompt[:max_chars]
+
+        allowed = max_chars - len(header)
+        truncated_body = body[-allowed:]
+        if "\n" in truncated_body:
+            truncated_body = truncated_body[truncated_body.index("\n") + 1 :]
 
         logger.warning(
-            "Conversation prompt exceeded %d chars and was truncated to %d chars. "
-            "This helps avoid provider request limits.",
+            "Conversation prompt exceeded %d chars and was truncated to %d chars (preserving system header).",
             max_chars,
-            len(truncated),
+            len(header) + len(truncated_body),
         )
+
         return (
-            "NOTE: The conversation was truncated to fit the model's request limits. "
-            "Only the latest context is included.\n\n" + truncated
+            header
+            + "NOTE: The conversation was truncated to fit the model's request limits. Only the latest context is included.\n\n"
+            + truncated_body
         )
 
     def _generate(self, prompt: str) -> str:
