@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { postChat, postUploadAudio, postUploadImage } from '../services/api';
+import { streamChat, postUploadAudio, postUploadImage } from '../services/api';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { Spinner } from '../components/shared/LoadingStates';
 
@@ -51,6 +51,29 @@ function TtsBanner({ onEnable, onDismiss }) {
 /* ─────────────────────────────────────────────
    ChatPage
 ───────────────────────────────────────────── */
+
+/* ─── Blinking cursor animation (injected once into <head>) ─────────────── */
+const CURSOR_STYLE_ID = 'kb-stream-cursor-style';
+if (!document.getElementById(CURSOR_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = CURSOR_STYLE_ID;
+  style.textContent = `
+    @keyframes kb-blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    .kb-streaming-cursor::after {
+      content: '|';
+      display: inline-block;
+      margin-left: 1px;
+      animation: kb-blink 0.8s step-start infinite;
+      color: inherit;
+      font-weight: 400;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export default function ChatPage() {
   const { t } = useTranslation();
   const { lat, lon } = useGeolocation();
@@ -142,35 +165,112 @@ export default function ChatPage() {
   };
 
   // ── Chat handlers ───────────────────────────
+
+  const scrollToBottom = useCallback(
+    () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }),
+    []
+  );
+
+  /* Auto-scroll whenever messages change */
+  useEffect(() => {
+    const raf = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(raf);
+  }, [messages, scrollToBottom]);
+
+  /* ── Streaming text send ───────────────────────────────────────────────── */
   const sendText = async () => {
     if (!input.trim() || loading) return;
     const text = input.trim();
     setInput('');
-    setMessages((m) => [...m, { role: 'user', content: text, ts: Date.now() }]);
     setLoading(true);
+
+    /* 1. Push user bubble */
+    setMessages((m) => [...m, { role: 'user', content: text, ts: Date.now() }]);
+
+    /* 2. Push an empty streaming assistant bubble */
+    setMessages((m) => [
+      ...m,
+      { role: 'assistant', content: '', ts: Date.now(), streaming: true },
+    ]);
+
     try {
-      const res = await postChat(text, lat, lon);
-      const newIdx = messages.length + 1; // approximate; recalculate below
-      setMessages((m) => {
-        const updated = [
-          ...m,
-          { role: 'assistant', content: res.reply_text, ts: Date.now(), tts_path: res.tts_path ?? null },
-        ];
-        // auto-play after state update
-        setTimeout(() => maybeAutoPlay(res.tts_path, updated.length - 1), 50);
-        return updated;
-      });
+      await streamChat(
+        text,
+        lat,
+        lon,
+        /* onChunk */ (chunk) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = { ...last, content: last.content + chunk };
+            }
+            return copy;
+          });
+        },
+        /* onDone */ (fullText, tts_path) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                content: fullText,
+                streaming: false,
+                tts_path: tts_path ?? null,
+              };
+            }
+            return copy;
+          });
+          setLoading(false);
+          if (tts_path) {
+            setTimeout(() => maybeAutoPlay(tts_path, messages.length + 1), 50);
+          }
+        },
+        /* onError */ (errMsg) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                content: `❌ ${errMsg}`,
+                streaming: false,
+                error: true,
+              };
+            } else {
+              copy.push({
+                role: 'assistant',
+                content: `❌ ${errMsg}`,
+                ts: Date.now(),
+                error: true,
+              });
+            }
+            return copy;
+          });
+          setLoading(false);
+        }
+      );
     } catch (err) {
-      setMessages((m) => [
-        ...m,
-        { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true },
-      ]);
-    } finally {
+      /* Catch unexpected rejections */
+      setMessages((m) => {
+        const copy = [...m];
+        const last = copy[copy.length - 1];
+        if (last?.streaming) {
+          copy[copy.length - 1] = {
+            ...last,
+            content: `❌ ${err.message}`,
+            streaming: false,
+            error: true,
+          };
+        }
+        return copy;
+      });
       setLoading(false);
-      setTimeout(scrollToBottom, 100);
     }
   };
 
+  /* ── Voice recording (unchanged) ──────────────────────────────────────── */
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -200,7 +300,6 @@ export default function ChatPage() {
           ]);
         } finally {
           setLoading(false);
-          setTimeout(scrollToBottom, 100);
         }
       };
       recorder.start();
@@ -216,6 +315,7 @@ export default function ChatPage() {
     setRecording(false);
   };
 
+  /* ── Image upload (unchanged) ─────────────────────────────────────────── */
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -238,11 +338,10 @@ export default function ChatPage() {
       ]);
     } finally {
       setLoading(false);
-      setTimeout(scrollToBottom, 100);
     }
   };
 
-  // ── Render ──────────────────────────────────
+      /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
 
@@ -270,7 +369,7 @@ export default function ChatPage() {
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed relative
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed relative
                 ${msg.role === 'user'
                   ? 'bg-primary text-white rounded-br-md'
                   : msg.error
@@ -278,33 +377,38 @@ export default function ChatPage() {
                     : 'bg-surface shadow-card text-text-primary rounded-bl-md'
                 }`}
             >
-              {/* Bot label + sound-wave indicator */}
-              {msg.role === 'assistant' && (
-                <span className="text-xs text-text-secondary flex items-center gap-1.5 mb-1">
-                  🤖 {t('app.name')}
-                  {playingIdx === i && <SoundWave />}
-                </span>
-              )}
+                  {/* Bot label + sound-wave indicator */}
+                  {msg.role === 'assistant' && (
+                    <span className="text-xs text-text-secondary flex items-center gap-1.5 mb-1">
+                      🤖 {t('app.name')}
+                      {playingIdx === i && <SoundWave />}
+                    </span>
+                  )}
 
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <p
+                    className={`whitespace-pre-wrap${msg.streaming ? ' kb-streaming-cursor' : ''}`}
+                  >
+                    {msg.content}
+                  </p>
 
-              {/* Per-message replay button for assistant messages */}
-              {msg.role === 'assistant' && !msg.error && msg.tts_path && (
-                <button
-                  id={`tts-replay-${i}`}
-                  className={`tts-replay-btn ${playingIdx === i ? 'tts-replay-btn--playing' : ''}`}
-                  onClick={() => playTts(msg.tts_path, i)}
-                  title="Replay audio"
-                  aria-label="Replay audio"
-                >
-                  {playingIdx === i ? '⏸' : '🔈'}
-                </button>
-              )}
+                  {/* Per-message replay button for assistant messages */}
+                  {msg.role === 'assistant' && !msg.error && msg.tts_path && (
+                    <button
+                      id={`tts-replay-${i}`}
+                      className={`tts-replay-btn ${playingIdx === i ? 'tts-replay-btn--playing' : ''}`}
+                      onClick={() => playTts(msg.tts_path, i)}
+                      title="Replay audio"
+                      aria-label="Replay audio"
+                    >
+                      {playingIdx === i ? '⏸' : '🔈'}
+                    </button>
+                  )}
             </div>
           </div>
         ))}
 
-        {loading && (
+            {/* Show thinking indicator only while waiting for the first chunk */}
+            {loading && messages[messages.length - 1]?.streaming === true && messages[messages.length - 1]?.content === '' && (
           <div className="flex justify-start">
             <div className="bg-surface shadow-card rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
               <Spinner size="sm" className="text-primary" />
@@ -312,6 +416,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
