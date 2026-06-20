@@ -85,3 +85,101 @@
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+/* ─── TTS Onboarding Banner ─────────────────────────────── */
+.tts-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #1a6b3a 0%, #2d9c5c 100%);
+  color: #fff;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  box-shadow: 0 4px 16px rgba(26,107,58,0.25);
+  animation: slideDown 0.3s ease;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tts-banner__icon { font-size: 1.25rem; flex-shrink: 0; }
+.tts-banner__text { flex: 1; line-height: 1.4; }
+.tts-banner__actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+.tts-banner__btn {
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+.tts-banner__btn--enable {
+  background: #fff;
+  color: #1a6b3a;
+}
+.tts-banner__btn--enable:hover { background: #f0faf4; transform: scale(1.04); }
+.tts-banner__btn--dismiss {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+}
+.tts-banner__btn--dismiss:hover { background: rgba(255,255,255,0.3); }
+
+/* ─── TTS Toggle Button (header) ────────────────────────── */
+.tts-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  font-size: 1.15rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.tts-toggle--on  { background: #e8f5ee; }
+.tts-toggle--off { background: #f3f3f3; opacity: 0.65; }
+.tts-toggle:hover { transform: scale(1.1); }
+.tts-toggle:active { transform: scale(0.95); }
+
+/* ─── Per-message Replay Button ─────────────────────────── */
+.tts-replay-btn {
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.2s, transform 0.15s;
+  line-height: 1;
+  padding: 0;
+}
+.tts-replay-btn:hover { opacity: 1; transform: scale(1.18); }
+.tts-replay-btn--playing { opacity: 1; }
+
+/* ─── Sound Wave Animation ───────────────────────────────── */
+.sound-wave {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  vertical-align: middle;
+}
+.sound-wave .bar {
+  width: 3px;
+  border-radius: 2px;
+  background: #2d9c5c;
+  animation: soundBar 0.8s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+}
+@keyframes soundBar {
+  from { height: 3px;  opacity: 0.5; }
+  to   { height: 14px; opacity: 1;   }
+}
+

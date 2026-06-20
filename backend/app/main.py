@@ -458,9 +458,20 @@ async def upload_audio(
             conv_id=saved_conv_id
         )
 
+        # --- TTS: generate audio for Bengali replies ---
+        from app.services.tts import generate_tts
+        tts_path = None
+        try:
+            lang = initial_state.get("language", "bn")
+            if lang in ("bn", "bengali", "bn-BD"):
+                tts_path = await asyncio.to_thread(generate_tts, reply_text[:600], language="bn-BD")
+        except Exception as tts_err:
+            logger.warning("TTS generation failed", error=str(tts_err))
+
         return JSONResponse({
             "transcript": transcript,
             "reply_text": reply_text,
+            "tts_path": tts_path,
             "user_id": current_user.external_id,
             "gps": initial_state["gps"]
         })
@@ -526,9 +537,20 @@ async def upload_image(
             conv_id=saved_conv_id
         )
 
+        # --- TTS: generate audio for Bengali replies ---
+        from app.services.tts import generate_tts
+        tts_path = None
+        try:
+            lang = initial_state.get("language", "bn")
+            if lang in ("bn", "bengali", "bn-BD"):
+                tts_path = await asyncio.to_thread(generate_tts, reply_text[:600], language="bn-BD")
+        except Exception as tts_err:
+            logger.warning("TTS generation failed", error=str(tts_err))
+
         return JSONResponse({
             "transcript": question,
             "reply_text": reply_text,
+            "tts_path": tts_path,
             "user_id": current_user.external_id,
             "gps": initial_state["gps"]
         })
@@ -628,9 +650,20 @@ async def chat(
             conv_id=saved_conv_id
         )
 
+        # --- TTS: generate audio for Bengali replies ---
+        from app.services.tts import generate_tts
+        tts_path = None
+        try:
+            lang = initial_state.get("language", "bn")
+            if lang in ("bn", "bengali", "bn-BD"):
+                tts_path = await asyncio.to_thread(generate_tts, reply_text[:600], language="bn-BD")
+        except Exception as tts_err:
+            logger.warning("TTS generation failed", error=str(tts_err))
+
         return JSONResponse({
             "transcript": message,
             "reply_text": reply_text,
+            "tts_path": tts_path,
             "user_id": current_user.external_id,
             "gps": initial_state["gps"]
         })

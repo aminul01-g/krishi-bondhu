@@ -6,6 +6,9 @@ from uuid import uuid4
 from app.api.utils import UPLOAD_DIR
 import time
 
+# Maximum characters sent to TTS to avoid excessively long audio files
+TTS_MAX_CHARS = 600
+
 def clean_text_for_tts(text: str) -> str:
     """
     Clean text for TTS by removing markdown, special symbols, and formatting.
@@ -89,7 +92,7 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
         traceback.print_exc()
         # Try with original text as fallback
         try:
-            tts = gTTS(text[:500], lang=lang if lang else "en")  # Limit length
+            tts = gTTS(text[:TTS_MAX_CHARS], lang=lang if lang else "en")  # Limit length
             tts.save(tts_path)
             
             # Verify fallback file was created with retry logic
@@ -111,3 +114,27 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
             import traceback
             traceback.print_exc()
             raise
+
+
+def generate_tts(text: str, language: str = "bn") -> str:
+    """
+    Public API for TTS generation used by API endpoints.
+
+    Normalises the language code (e.g. 'bn-BD' → 'bn') so that gTTS
+    accepts it, truncates the input to TTS_MAX_CHARS characters, cleans
+    markdown/formatting, then delegates to synthesize_tts.
+
+    Args:
+        text: The text to synthesise. Will be truncated to TTS_MAX_CHARS.
+        language: BCP-47 or ISO 639-1 language code. Defaults to 'bn' (Bengali).
+
+    Returns:
+        Absolute file path of the generated .mp3 audio file.
+    """
+    # Normalise language code: 'bn-BD' → 'bn', 'en-US' → 'en', etc.
+    lang_code = language.split("-")[0].lower() if language else "bn"
+
+    # Truncate before cleaning so we don't waste compute on discarded text
+    truncated = text[:TTS_MAX_CHARS]
+
+    return synthesize_tts(truncated, lang=lang_code)
