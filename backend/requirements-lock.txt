@@ -50,7 +50,9 @@ audioread==3.1.0
 backoff==2.2.1
     # via posthog
 bcrypt==5.0.0
-    # via chromadb
+    # via
+    #   chromadb
+    #   passlib
 beautifulsoup4==4.14.3
     # via
     #   krishibondhu-backend (pyproject.toml)
@@ -115,6 +117,7 @@ cryptography==47.0.0
     # via
     #   google-auth
     #   pyjwt
+    #   python-jose
 cuda-bindings==13.2.0
     # via torch
 cuda-pathfinder==1.5.4
@@ -157,6 +160,8 @@ docstring-parser==0.15
     #   instructor
 durationpy==0.10
     # via kubernetes
+ecdsa==0.19.2
+    # via python-jose
 embedchain==0.1.113
     # via
     #   crewai
@@ -592,6 +597,8 @@ pandas==3.0.2
     #   krishibondhu-backend (pyproject.toml)
     #   cmdstanpy
     #   prophet
+passlib==1.7.4
+    # via krishibondhu-backend (pyproject.toml)
 pfzy==0.3.4
     # via inquirerpy
 pgvector==0.4.2
@@ -652,7 +659,10 @@ py==1.11.0
 pyarrow==24.0.0
     # via pylance
 pyasn1==0.6.3
-    # via pyasn1-modules
+    # via
+    #   pyasn1-modules
+    #   python-jose
+    #   rsa
 pyasn1-modules==0.4.2
     # via google-auth
 pycparser==3.0
@@ -731,6 +741,8 @@ python-dotenv==1.0.0
     #   embedchain
     #   pydantic-settings
     #   uvicorn
+python-jose==3.5.0
+    # via krishibondhu-backend (pyproject.toml)
 python-multipart==0.0.27
     # via krishibondhu-backend (pyproject.toml)
 python-rapidjson==1.23
@@ -799,6 +811,8 @@ rich==13.9.4
     #   clarifai
     #   embedchain
     #   instructor
+rsa==4.9.1
+    # via python-jose
 safetensors==0.7.0
     # via
     #   accelerate
@@ -830,6 +844,7 @@ setuptools==81.0.0
     #   torch
 six==1.17.0
     # via
+    #   ecdsa
     #   kubernetes
     #   posthog
     #   python-dateutil
