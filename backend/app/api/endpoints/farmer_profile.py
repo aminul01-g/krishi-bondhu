@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import func
 
-from ..db import get_db
-from ..models.db_models import User, FarmerProfile
-from ..core.dependencies import get_current_user
+from app.db import get_db
+from app.models.db_models import User, FarmerProfile
+from app.core.dependencies import get_current_user
 
 router = APIRouter()
 
