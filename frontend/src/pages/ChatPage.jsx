@@ -108,8 +108,7 @@ export default function ChatPage() {
   const audioRef = useRef(null); // single Audio instance reused
 
   // ── Helpers ────────────────────────────────
-  const scrollToBottom = () =>
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+
 
   const persistTts = (val) => {
     setTtsEnabled(val);
