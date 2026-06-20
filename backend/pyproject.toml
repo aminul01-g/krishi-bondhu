@@ -12,7 +12,6 @@ dependencies = [
     "pydantic-settings>=2.2.1",
     "aiofiles>=23.2.1",
     "pydantic>=2.0.0",
-    
     # AI & Agents
     "crewai==0.28.8",
     "crewai-tools==0.1.6",
@@ -28,7 +27,6 @@ dependencies = [
     "bitsandbytes>=0.43.0",
     "soundfile>=0.12.1",
     "librosa>=0.10.1",
-    
     # Database
     "sqlalchemy>=2.0.25",
     "asyncpg>=0.29.0",
@@ -41,24 +39,22 @@ dependencies = [
     "redis>=5.2.1",
     "prophet>=1.1.5",
     "structlog>=25.5.0",
-    
     # Audio/Misc
     "gtts>=2.5.0",
     "cachetools>=5.3.2",
     "fpdf2>=2.7.8",
-    
     # KrishiBondhu Phase 2 Features
     "apscheduler>=3.10.4",
     "beautifulsoup4>=4.12.3",
     "pandas>=2.0.0",
     "httpx>=0.26.0",
-    
     # KrishiBondhu Phase 3 Features
     "sentence-transformers>=2.3.1",
     "pyzbar>=0.1.9",
     "pytesseract>=0.3.10",
     "numpy>=1.26.0",
     "opencv-python-headless>=4.9.0",
+    "slowapi>=0.1.10",
 ]
 
 [build-system]
