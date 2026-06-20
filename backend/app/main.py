@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form, Depends, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -637,6 +637,130 @@ async def chat(
     except Exception as e:
         logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
         return JSONResponse({"error": "Something went wrong. Please try again.", "code": "AGENT_ERROR"}, status_code=500)
+
+@app.post('/api/chat/stream')
+@limiter.limit("20/minute")
+async def chat_stream(
+    request: Request,
+    message: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    lat: float = Form(None),
+    lon: float = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """SSE streaming endpoint — yields word-by-word chunks as text/event-stream."""
+    import json as _json
+    from app.services.audio import detect_language_from_text
+    from sqlalchemy import select, desc
+    from app.models.db_models import Conversation as _Conversation
+
+    header_lang = request.headers.get('x-kb-lang')
+    detected_language = header_lang or detect_language_from_text(message)
+
+    # Build conversation history for context
+    messages_ctx = [{"role": "user", "content": message}]
+    user_db_id = current_user.id
+    if user_db_id:
+        try:
+            hist = await db.execute(
+                select(_Conversation)
+                .where(_Conversation.user_id == user_db_id)
+                .order_by(desc(_Conversation.created_at))
+                .limit(5)
+            )
+            previous_convs = list(reversed(hist.scalars().all()))
+            for conv in previous_convs:
+                if conv.transcript:
+                    messages_ctx.insert(0, {"role": "user", "content": conv.transcript})
+                if conv.meta_data and conv.meta_data.get("reply_text"):
+                    messages_ctx.insert(1, {"role": "assistant", "content": conv.meta_data.get("reply_text", "")})
+        except Exception as hist_err:
+            logger.warning("Failed to load history for SSE chat", error=str(hist_err))
+
+    initial_state = {
+        "user_id": current_user.external_id,
+        "gps": {"lat": lat, "lon": lon},
+        "image_path": None,
+        "transcript": message,
+        "language": detected_language,
+        "messages": messages_ctx
+    }
+
+    async def generate():
+        try:
+            # Signal to the client that we are thinking
+            yield f"data: {_json.dumps({'type': 'thinking'})}\n\n"
+
+            from app.crews.krishi_crew import KrishiCrew
+            from crewai import Task
+            from app.agents.bengali_interpreter import bengali_interpreter
+
+            clean_msg = message.lower().strip()
+            greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
+
+            if clean_msg in greetings:
+                reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
+            else:
+                route_task = Task(
+                    description=(
+                        f"Process the user's message: {message}. "
+                        "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
+                        "You must provide the final expert advice directly to the user."
+                    ),
+                    expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
+                    agent=bengali_interpreter
+                )
+                crew_obj = KrishiCrew()
+                crew = crew_obj.create_crew(tasks=[route_task])
+                result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
+                reply_text = str(result)
+
+            # Stream reply word-by-word (3 words per chunk)
+            words = reply_text.split(' ')
+            chunk = ''
+            for i, word in enumerate(words):
+                chunk += word + ' '
+                if i % 3 == 0:
+                    yield f"data: {_json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
+                    chunk = ''
+                    await asyncio.sleep(0.05)
+            if chunk:
+                yield f"data: {_json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
+
+            # Persist to DB after full response
+            saved_conv_id = await save_conversation_to_db(
+                db,
+                user_db_id,
+                message,
+                reply_text,
+                metadata={"gps": initial_state["gps"]},
+            )
+
+            try:
+                await MemoryService.extract_and_save_facts(
+                    db,
+                    current_user.external_id,
+                    message,
+                    conv_id=saved_conv_id
+                )
+            except Exception as mem_err:
+                logger.warning("Memory extraction failed in SSE stream", error=str(mem_err))
+
+            yield f"data: {_json.dumps({'type': 'done', 'full_text': reply_text})}\n\n"
+
+        except Exception as e:
+            logger.error("SSE stream error", error=str(e), traceback=traceback.format_exc())
+            yield f"data: {_json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 @app.get('/api/get_tts')
 async def get_tts(path: str):

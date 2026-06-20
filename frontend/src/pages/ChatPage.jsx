@@ -1,8 +1,30 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { postChat, postUploadAudio, postUploadImage } from '../services/api';
+import { streamChat, postUploadAudio, postUploadImage } from '../services/api';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { Spinner } from '../components/shared/LoadingStates';
+
+/* ─── Blinking cursor animation (injected once into <head>) ─────────────── */
+const CURSOR_STYLE_ID = 'kb-stream-cursor-style';
+if (!document.getElementById(CURSOR_STYLE_ID)) {
+  const style = document.createElement('style');
+  style.id = CURSOR_STYLE_ID;
+  style.textContent = `
+    @keyframes kb-blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    .kb-streaming-cursor::after {
+      content: '|';
+      display: inline-block;
+      margin-left: 1px;
+      animation: kb-blink 0.8s step-start infinite;
+      color: inherit;
+      font-weight: 400;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 export default function ChatPage() {
   const { t } = useTranslation();
@@ -18,25 +40,108 @@ export default function ChatPage() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  const scrollToBottom = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = useCallback(
+    () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }),
+    []
+  );
 
+  /* Auto-scroll whenever messages change */
+  useEffect(() => {
+    const raf = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(raf);
+  }, [messages, scrollToBottom]);
+
+  /* ── Streaming text send ───────────────────────────────────────────────── */
   const sendText = async () => {
     if (!input.trim() || loading) return;
     const text = input.trim();
     setInput('');
-    setMessages((m) => [...m, { role: 'user', content: text, ts: Date.now() }]);
     setLoading(true);
+
+    /* 1. Push user bubble */
+    setMessages((m) => [...m, { role: 'user', content: text, ts: Date.now() }]);
+
+    /* 2. Push an empty streaming assistant bubble */
+    setMessages((m) => [
+      ...m,
+      { role: 'assistant', content: '', ts: Date.now(), streaming: true },
+    ]);
+
     try {
-      const res = await postChat(text, lat, lon);
-      setMessages((m) => [...m, { role: 'assistant', content: res.reply_text, ts: Date.now() }]);
+      await streamChat(
+        text,
+        lat,
+        lon,
+        /* onChunk */ (chunk) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = { ...last, content: last.content + chunk };
+            }
+            return copy;
+          });
+        },
+        /* onDone */ (fullText) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              /* Use the authoritative full text from the server */
+              copy[copy.length - 1] = {
+                ...last,
+                content: fullText,
+                streaming: false,
+              };
+            }
+            return copy;
+          });
+          setLoading(false);
+        },
+        /* onError */ (errMsg) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                content: `❌ ${errMsg}`,
+                streaming: false,
+                error: true,
+              };
+            } else {
+              copy.push({
+                role: 'assistant',
+                content: `❌ ${errMsg}`,
+                ts: Date.now(),
+                error: true,
+              });
+            }
+            return copy;
+          });
+          setLoading(false);
+        }
+      );
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true }]);
-    } finally {
+      /* Catch unexpected rejections (e.g. network abort before response starts) */
+      setMessages((m) => {
+        const copy = [...m];
+        const last = copy[copy.length - 1];
+        if (last?.streaming) {
+          copy[copy.length - 1] = {
+            ...last,
+            content: `❌ ${err.message}`,
+            streaming: false,
+            error: true,
+          };
+        }
+        return copy;
+      });
       setLoading(false);
-      setTimeout(scrollToBottom, 100);
     }
   };
 
+  /* ── Voice recording (unchanged) ──────────────────────────────────────── */
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -53,10 +158,12 @@ export default function ChatPage() {
           const res = await postUploadAudio(file, lat, lon);
           setMessages((m) => [...m, { role: 'assistant', content: res.reply_text, ts: Date.now() }]);
         } catch (err) {
-          setMessages((m) => [...m, { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true }]);
+          setMessages((m) => [
+            ...m,
+            { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true },
+          ]);
         } finally {
           setLoading(false);
-          setTimeout(scrollToBottom, 100);
         }
       };
       recorder.start();
@@ -72,6 +179,7 @@ export default function ChatPage() {
     setRecording(false);
   };
 
+  /* ── Image upload (unchanged) ─────────────────────────────────────────── */
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -81,32 +189,45 @@ export default function ChatPage() {
       const res = await postUploadImage(file, lat, lon, '');
       setMessages((m) => [...m, { role: 'assistant', content: res.reply_text, ts: Date.now() }]);
     } catch (err) {
-      setMessages((m) => [...m, { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true }]);
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: `❌ ${err.message}`, ts: Date.now(), error: true },
+      ]);
     } finally {
       setLoading(false);
-      setTimeout(scrollToBottom, 100);
     }
   };
 
+  /* ── Render ───────────────────────────────────────────────────────────── */
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 pb-4 -mx-4 px-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed
-              ${msg.role === 'user'
-                ? 'bg-primary text-white rounded-br-md'
-                : msg.error
-                  ? 'bg-danger-light text-danger rounded-bl-md'
-                  : 'bg-surface shadow-card text-text-primary rounded-bl-md'
-              }`}>
-              {msg.role === 'assistant' && <span className="text-xs text-text-secondary block mb-1">🤖 {t('app.name')}</span>}
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+            <div
+              className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+                ${msg.role === 'user'
+                  ? 'bg-primary text-white rounded-br-md'
+                  : msg.error
+                    ? 'bg-danger-light text-danger rounded-bl-md'
+                    : 'bg-surface shadow-card text-text-primary rounded-bl-md'
+                }`}
+            >
+              {msg.role === 'assistant' && (
+                <span className="text-xs text-text-secondary block mb-1">🤖 {t('app.name')}</span>
+              )}
+              <p
+                className={`whitespace-pre-wrap${msg.streaming ? ' kb-streaming-cursor' : ''}`}
+              >
+                {msg.content}
+              </p>
             </div>
           </div>
         ))}
-        {loading && (
+
+        {/* Show thinking indicator only while waiting for the first chunk */}
+        {loading && messages[messages.length - 1]?.streaming === true && messages[messages.length - 1]?.content === '' && (
           <div className="flex justify-start">
             <div className="bg-surface shadow-card rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
               <Spinner size="sm" className="text-primary" />
@@ -114,6 +235,7 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -140,9 +262,12 @@ export default function ChatPage() {
         />
 
         {input.trim() ? (
-          <button onClick={sendText} disabled={loading}
+          <button
+            onClick={sendText}
+            disabled={loading}
             className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white
-                       shadow-card hover:bg-primary-light transition-all flex-shrink-0">
+                       shadow-card hover:bg-primary-light transition-all flex-shrink-0"
+          >
             ➤
           </button>
         ) : (
