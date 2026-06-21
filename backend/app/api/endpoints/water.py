@@ -15,14 +15,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 weather_service = WeatherService()
 
+from typing import Optional, List, Dict, Any
+
+class IrrigationScheduleDay(BaseModel):
+    day: str
+    date: str
+    irrigate: bool
+    amount_mm: float
+    reason: str
+
 class WaterAdviceRequest(BaseModel):
     lat: float
     lon: float
     crop: str = "Rice"
 
 class WaterAdviceResponse(BaseModel):
+    crop: str
+    et0_mm_per_day: float
+    moisture_index: float
+    current_rainfall_mm: float
     advice: str
-    moisture_index: Optional[float] = None
+    irrigation_schedule: List[IrrigationScheduleDay]
     log_id: str
 
 @router.post("/advice", response_model=WaterAdviceResponse)
@@ -65,8 +78,8 @@ async def get_irrigation_advice(
         result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
         advice = str(result)
 
-        # Save to DB - Use the actual moisture index from weather data
-        moisture_index = water_balance.get("weather_context", {}).get("humidity", 0) / 100.0
+        # Save to DB - Use the actual moisture index from water balance
+        moisture_index = water_balance.get("moisture_index", 0.0)
 
         new_log = IrrigationLog(
             id=str(uuid.uuid4()),
@@ -79,8 +92,12 @@ async def get_irrigation_advice(
         await db.refresh(new_log)
 
         return WaterAdviceResponse(
-            advice=advice,
+            crop=request.crop,
+            et0_mm_per_day=water_balance.get("et0_mm_day", 0.0),
             moisture_index=moisture_index,
+            current_rainfall_mm=water_balance.get("rainfall_mm", 0.0),
+            advice=advice,
+            irrigation_schedule=water_balance.get("irrigation_schedule", []),
             log_id=new_log.id
         )
 
