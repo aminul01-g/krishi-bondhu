@@ -186,6 +186,12 @@ export const getDiaryReport = (signal) =>
 export const exportDiaryPdf = () =>
   request('GET', '/api/diary/export/pdf');
 
+export const getDiaryEntries = (page = 1, signal) =>
+  request('GET', `/api/diary/entries?page=${page}&per_page=20`, { signal });
+
+export const deleteDiaryEntry = (id) =>
+  request('DELETE', `/api/diary/entries/${id}`);
+
 // --- Alerts ---
 export const getDailyAlert = (crop, lat, lon, signal) =>
   request('GET', `/api/alerts/daily?crop=${encodeURIComponent(crop)}${lat ? `&lat=${lat}&lon=${lon}` : ''}`, { signal });

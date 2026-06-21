@@ -9,6 +9,33 @@ from app.models.db_models import FarmDiary
 
 logger = logging.getLogger("FinanceService")
 
+# --- NLP Category Detection ---
+
+CATEGORY_KEYWORDS: Dict[str, List[str]] = {
+    "seed": ["বীজ", "seed", "চারা", "সীড"],
+    "fertilizer": ["সার", "fertilizer", "ইউরিয়া", "ডিএপি", "পটাশ", "টিএসপি"],
+    "pesticide": ["কীটনাশক", "pesticide", "বিষ", "ওষুধ", "কীটনাশক", "ফাংগিসাইড"],
+    "labor": ["মজুর", "labor", "শ্রমিক", "মজুরি", "কামলা", "labour"],
+    "irrigation": ["সেচ", "irrigation", "পানি", "পাম্প", "নলকূপ"],
+    "harvest": ["ফলন", "harvest", "বিক্রি", "আয়", "ফসল", "কাটা", "বিক্রয়"],
+}
+
+
+def detect_category(text: str) -> str:
+    """
+    Detects the agricultural category from a Bengali/English diary text.
+    Returns the matched category key, or 'other' if none match.
+    """
+    if not text:
+        return "other"
+    text_lower = text.lower()
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in text_lower:
+                return category
+    return "other"
+
+
 class FinanceService:
     """
     Production-grade Service for agricultural finance, subsidies, and credit scoring.
