@@ -4,10 +4,10 @@ import { LanguageSwitcher } from '../shared/LanguageSwitcher';
 import { useAuth } from '../../contexts/AuthContext';
 
 const PRIMARY_TABS = [
+  { path: '/app/dashboard', icon: '🏠', labelBn: 'হোম'  },
   { path: '/app/chat',      icon: '💬', labelBn: 'চ্যাট'  },
   { path: '/app/field',     icon: '🌾', labelBn: 'মাঠ'    },
   { path: '/app/market',    icon: '📈', labelBn: 'বাজার'  },
-  { path: '/app/community', icon: '👥', labelBn: 'সমাজ'   },
   { path: '/app/profile',   icon: '👤', labelBn: 'আমি'    },
 ];
 
@@ -24,7 +24,7 @@ export function TopBar() {
   const getCurrentTitle = () => {
     const path = location.pathname.split('/').pop();
     const titleMap = {
-      chat: 'chat.title', market: 'market.title', diary: 'diary.title',
+      dashboard: 'nav.dashboard', chat: 'chat.title', market: 'market.title', diary: 'diary.title',
       tips: 'tips.title', emergency: 'emergency.title', soil: 'nav.soil',
       water: 'nav.water', finance: 'nav.finance', community: 'nav.community',
       marketplace: 'nav.marketplace', planner: 'nav.planner',
