@@ -8,6 +8,7 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary';
 // Lazy-loaded pages for code splitting
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const MarketPage = lazy(() => import('./pages/MarketPage'));
 const DiaryPage = lazy(() => import('./pages/DiaryPage'));
@@ -40,7 +41,7 @@ function ProtectedRoute({ children }) {
 function PublicRoute({ children }) {
   const { token, loading } = useAuth();
   if (loading) return <LoadingScreen />;
-  if (token) return <Navigate to="/app/chat" replace />;
+  if (token) return <Navigate to="/app/dashboard" replace />;
   return children;
 }
 
@@ -57,7 +58,8 @@ export default function App() {
 
               {/* Protected app routes */}
               <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route index element={<Navigate to="chat" replace />} />
+                <Route index element={<Navigate to="dashboard" replace />} />
+                <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="chat" element={<ChatPage />} />
                 <Route path="market" element={<MarketPage />} />
                 <Route path="diary" element={<DiaryPage />} />

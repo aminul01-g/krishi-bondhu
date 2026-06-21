@@ -35,6 +35,7 @@ from app.api.endpoints import planner as planner_routes
 from app.api.endpoints import traceability as traceability_routes
 from app.api.endpoints import sustainability as sustainability_routes
 from app.api.endpoints import farmer_profile as farmer_profile_routes
+from app.api.endpoints import dashboard as dashboard_routes
 from app.services.task_worker import task_worker_loop
 from app.services.memory import MemoryService
 from app.api.endpoints import memory as memory_routes
@@ -260,6 +261,7 @@ app.include_router(planner_routes.router, prefix="/api/planner", tags=["planner"
 app.include_router(traceability_routes.router, prefix="/api/traceability", tags=["traceability"])
 app.include_router(sustainability_routes.router, prefix="/api/sustainability", tags=["sustainability"])
 app.include_router(farmer_profile_routes.router, prefix="/api/profile", tags=["profile"])
+app.include_router(dashboard_routes.router, prefix="/api/dashboard", tags=["dashboard"])
 
 # --- APScheduler Setup ---
 from apscheduler.schedulers.asyncio import AsyncIOScheduler

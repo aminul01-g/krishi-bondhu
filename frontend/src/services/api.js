@@ -161,6 +161,14 @@ export const postUploadImage = (image, lat, lon, question = '') => {
   return request('POST', '/api/upload_image', { body: form, isForm: true });
 };
 
+// --- Dashboard ---
+export const getDashboardSummary = (lat, lon, crops, signal) => {
+  let query = '';
+  if (lat != null && lon != null) query += `lat=${lat}&lon=${lon}&`;
+  if (crops) query += `crops=${encodeURIComponent(crops)}`;
+  return request('GET', `/api/dashboard/summary?${query}`, { signal });
+};
+
 // --- Market ---
 export const getMarketAdvice = (crop, lat, lon, signal) =>
   request('GET', `/api/market/advice?crop=${encodeURIComponent(crop)}${lat ? `&lat=${lat}&lon=${lon}` : ''}`, { signal });
