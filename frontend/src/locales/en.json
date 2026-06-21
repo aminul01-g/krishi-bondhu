@@ -59,7 +59,9 @@
     "marketplace": "Marketplace",
     "planner": "Planner",
     "traceability": "Traceability",
-    "sustainability": "Sustainability"
+    "sustainability": "Sustainability",
+    "field": "Field Management",
+    "profile": "My Profile"
   },
   "chat": {
     "title": "Farm Advisor",

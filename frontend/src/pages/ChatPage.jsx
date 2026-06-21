@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import { streamChat, postUploadAudio, postUploadImage } from '../services/api';
 import { useGeolocation } from '../hooks/useGeolocation';
@@ -384,11 +385,20 @@ export default function ChatPage() {
                     </span>
                   )}
 
-                  <p
-                    className={`whitespace-pre-wrap${msg.streaming ? ' kb-streaming-cursor' : ''}`}
-                  >
-                    {msg.content}
-                  </p>
+                  <div className={`prose prose-sm max-w-none text-sm leading-relaxed${msg.streaming ? ' kb-streaming-cursor' : ''}`}>
+                    <ReactMarkdown
+                      components={{
+                        h2: ({children}) => <h2 className="font-semibold text-sm mt-3 mb-1">{children}</h2>,
+                        h3: ({children}) => <h3 className="font-medium text-sm mt-2 mb-1">{children}</h3>,
+                        ul: ({children}) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
+                        li: ({children}) => <li className="text-sm">{children}</li>,
+                        strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                        p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
 
                   {/* Per-message replay button for assistant messages */}
                   {msg.role === 'assistant' && !msg.error && msg.tts_path && (
