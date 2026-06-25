@@ -104,6 +104,177 @@ class SoilService:
         except Exception as e:
             return f"Error parsing DIY test data: {str(e)}"
 
+    # --- NPK soil test analysis (deterministic, rule-based) ---
+    # Optimal nutrient bands (kg/ha). Below/above these the soil is deficient/excess.
+    N_BAND = (100, 250)   # nitrogen
+    P_BAND = (15, 40)     # phosphorus
+    K_BAND = (100, 200)   # potassium
+    OM_BAND = (1.5, 3.5)  # organic matter (%)
+
+    @staticmethod
+    def _nutrient_status(value: float, low: float, high: float) -> str:
+        """Map a value to a Bengali low/sufficient/high status."""
+        if value < low:
+            return "কম"
+        if value > high:
+            return "বেশি"
+        return "পর্যাপ্ত"
+
+    @staticmethod
+    def _ph_status(ph: float) -> str:
+        if ph < 6.5:
+            return "অম্লীয়"
+        if ph > 7.5:
+            return "ক্ষারীয়"
+        return "নিরপেক্ষ"
+
+    def analyze_npk(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Deterministic NPK + pH analysis with fertilizer recommendations.
+        No LLM dependency — fast and predictable rule-based logic.
+
+        Expected input keys: nitrogen, phosphorus, potassium, ph, organic_matter, crop, district?
+        """
+        nitrogen = float(data.get("nitrogen", 0))
+        phosphorus = float(data.get("phosphorus", 0))
+        potassium = float(data.get("potassium", 0))
+        ph = float(data.get("ph", 6.5))
+        organic_matter = float(data.get("organic_matter", 2.0))
+        crop = data.get("crop", "ধান")
+
+        n_status = self._nutrient_status(nitrogen, *self.N_BAND)
+        p_status = self._nutrient_status(phosphorus, *self.P_BAND)
+        k_status = self._nutrient_status(potassium, *self.K_BAND)
+        ph_stat = self._ph_status(ph)
+
+        # --- Health score (0-100): start full, penalise each deviation ---
+        score = 100
+        if n_status != "পর্যাপ্ত":
+            score -= 18
+        if p_status != "পর্যাপ্ত":
+            score -= 15
+        if k_status != "পর্যাপ্ত":
+            score -= 15
+        if ph_stat != "নিরপেক্ষ":
+            score -= 17
+        if organic_matter < self.OM_BAND[0]:
+            score -= 12
+        elif organic_matter > self.OM_BAND[1]:
+            score -= 5
+        score = max(0, min(100, score))
+
+        if score >= 70:
+            overall_health = "ভালো"
+        elif score >= 40:
+            overall_health = "মাঝারি"
+        else:
+            overall_health = "খারাপ"
+
+        recommendations = self._build_recommendations(
+            n_status, p_status, k_status, ph_stat, organic_matter, crop
+        )
+
+        # Healthy soil needs testing less often; poor soil sooner.
+        next_test_days = 90 if overall_health != "খারাপ" else 60
+
+        return {
+            "overall_health": overall_health,
+            "health_score": score,
+            "n_status": n_status,
+            "p_status": p_status,
+            "k_status": k_status,
+            "ph_status": ph_stat,
+            "recommendations": recommendations,
+            "next_test_recommended_days": next_test_days,
+        }
+
+    def _build_recommendations(
+        self, n_status, p_status, k_status, ph_stat, organic_matter, crop
+    ) -> List[Dict[str, str]]:
+        """Produce one actionable recommendation per problem detected."""
+        recs: List[Dict[str, str]] = []
+
+        is_rice = crop in ("ধান", "rice", "Rice")
+
+        if n_status == "কম":
+            recs.append({
+                "nutrient": "নাইট্রোজেন",
+                "action": "ইউরিয়া সার দিন",
+                "amount": "প্রতি বিঘায় ৮ কেজি" if is_rice else "প্রতি বিঘায় ৬ কেজি",
+                "timing": "রোপণের ২ সপ্তাহ পর",
+                "brand_suggestion": "BCIC ইউরিয়া",
+            })
+        elif n_status == "বেশি":
+            recs.append({
+                "nutrient": "নাইট্রোজেন",
+                "action": "ইউরিয়া সার কমান",
+                "amount": "প্রতি বিঘায় ৩ কেজি",
+                "timing": "পরবর্তী কিস্তিতে",
+                "brand_suggestion": "—",
+            })
+
+        if p_status == "কম":
+            recs.append({
+                "nutrient": "ফসফরাস",
+                "action": "টিএসপি সার দিন",
+                "amount": "প্রতি বিঘায় ১০ কেজি",
+                "timing": "জমি তৈরির সময় (শেষ চাষে)",
+                "brand_suggestion": "BCIC টিএসপি",
+            })
+        elif p_status == "বেশি":
+            recs.append({
+                "nutrient": "ফসফরাস",
+                "action": "ফসফরাস সার বন্ধ রাখুন",
+                "amount": "এই মৌসুমে টিএসপি দেবেন না",
+                "timing": "পরবর্তী পরীক্ষা পর্যন্ত",
+                "brand_suggestion": "—",
+            })
+
+        if k_status == "কম":
+            recs.append({
+                "nutrient": "পটাসিয়াম",
+                "action": "এমওপি সার দিন",
+                "amount": "প্রতি বিঘায় ৬ কেজি",
+                "timing": "রোপণের ৩০ দিন পর",
+                "brand_suggestion": "BCIC এমওপি",
+            })
+        elif k_status == "বেশি":
+            recs.append({
+                "nutrient": "পটাসিয়াম",
+                "action": "এমওপি সার কমান",
+                "amount": "প্রতি বিঘায় ২ কেজি",
+                "timing": "পরবর্তী কিস্তিতে",
+                "brand_suggestion": "—",
+            })
+
+        if ph_stat == "অম্লীয়":
+            recs.append({
+                "nutrient": "পিএইচ (অম্লীয়)",
+                "action": "ডলোচুন প্রয়োগ করুন",
+                "amount": "প্রতি বিঘায় ১২ কেজি",
+                "timing": "জমি তৈরির সময়",
+                "brand_suggestion": "BCIC ডলোচুন",
+            })
+        elif ph_stat == "ক্ষারীয়":
+            recs.append({
+                "nutrient": "পিএইচ (ক্ষারীয়)",
+                "action": "গন্ধক (জিপসাম) প্রয়োগ করুন",
+                "amount": "প্রতি বিঘায় ৮ কেজি",
+                "timing": "জমি তৈরির সময়",
+                "brand_suggestion": "কৃষি জিপসাম",
+            })
+
+        if organic_matter < self.OM_BAND[0]:
+            recs.append({
+                "nutrient": "জৈব পদার্থ",
+                "action": "পচা গোবর বা কম্পোস্ট দিন",
+                "amount": "প্রতি বিঘায় ২ টন",
+                "timing": "জমি তৈরির সময়",
+                "brand_suggestion": "ভার্মিকম্পোস্ট",
+            })
+
+        return recs
+
     def recommend_fertilizer(self, soil_summary: str, crop: str) -> str:
         """Generates a balanced hybrid fertilizer plan."""
         summary_lower = soil_summary.lower()

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db_session
 from app.services.soil_service import SoilService
@@ -16,6 +17,54 @@ soil_service = SoilService()
 class SoilAnalysisResponse(BaseModel):
     analysis: str
     recommendations: str = None
+
+
+class SoilRecommendation(BaseModel):
+    nutrient: str
+    action: str
+    amount: str
+    timing: str
+    brand_suggestion: str = ""
+
+
+class SoilTestRequest(BaseModel):
+    """Lab-style NPK + pH soil test values."""
+    nitrogen: float = Field(..., ge=0, le=400, description="kg/ha")
+    phosphorus: float = Field(..., ge=0, le=100, description="kg/ha")
+    potassium: float = Field(..., ge=0, le=400, description="kg/ha")
+    ph: float = Field(..., ge=4.0, le=9.0, description="soil pH")
+    organic_matter: float = Field(2.0, ge=0, le=8, description="% organic matter")
+    crop: str = "ধান"
+    district: Optional[str] = None
+
+
+class SoilTestResponse(BaseModel):
+    overall_health: str  # ভালো | মাঝারি | খারাপ
+    health_score: int    # 0-100
+    n_status: str        # কম | পর্যাপ্ত | বেশি
+    p_status: str
+    k_status: str
+    ph_status: str       # অম্লীয় | নিরপেক্ষ | ক্ষারীয়
+    recommendations: List[SoilRecommendation]
+    next_test_recommended_days: int
+
+
+@router.post("/analyze", response_model=SoilTestResponse)
+async def analyze_soil_test(
+    request: SoilTestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Analyzes lab-style NPK + pH soil test results.
+    Returns an overall health score, per-nutrient status, and actionable
+    fertilizer recommendations (deterministic rule-based logic, no LLM call).
+    """
+    try:
+        result = soil_service.analyze_npk(request.model_dump())
+        return SoilTestResponse(**result)
+    except Exception as e:
+        logger.error(f"Soil NPK analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Soil analysis failed.")
 
 @router.post("/analyze-image")
 async def analyze_soil_image(
