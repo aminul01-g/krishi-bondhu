@@ -215,6 +215,9 @@ export const postSoilImage = (image, lat, lon) => {
   return request('POST', '/api/soil/analyze-image', { body: form, isForm: true });
 };
 
+export const postSoilAnalysis = (data) =>
+  request('POST', '/api/soil/analyze', { body: data });
+
 // --- Water ---
 export const postWaterAdvice = (lat, lon, crop) =>
   request('POST', '/api/water/advice', { body: { lat, lon, crop } });
