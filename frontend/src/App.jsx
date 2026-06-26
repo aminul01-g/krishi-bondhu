@@ -24,6 +24,7 @@ const TraceabilityPage = lazy(() => import('./pages/TraceabilityPage'));
 const SustainabilityPage = lazy(() => import('./pages/SustainabilityPage'));
 const FieldHubPage = lazy(() => import('./pages/FieldHubPage'));
 const ProfileHubPage = lazy(() => import('./pages/ProfileHubPage'));
+const ProfileEditPage = lazy(() => import('./pages/ProfileEditPage'));
 
 /**
  * Protected route wrapper — redirects to onboarding if not authenticated.
@@ -75,6 +76,7 @@ export default function App() {
                 <Route path="sustainability" element={<SustainabilityPage />} />
                 <Route path="field" element={<FieldHubPage />} />
                 <Route path="profile" element={<ProfileHubPage />} />
+                <Route path="profile/edit" element={<ProfileEditPage />} />
               </Route>
 
               {/* Catch-all */}
