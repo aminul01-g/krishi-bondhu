@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getFarmerProfile } from '../services/api';
 
 const APP_VERSION = '1.0.0';
 
@@ -16,7 +18,18 @@ export default function ProfileHubPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const district = localStorage.getItem('kb_district') || '—';
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    getFarmerProfile(ctrl.signal)
+      .then((data) => { if (data && Object.keys(data).length > 0) setProfile(data); })
+      .catch(() => { /* profile optional — leave as defaults */ });
+    return () => ctrl.abort();
+  }, []);
+
+  const district = profile?.district || '—';
+  const cropsLabel = profile?.crops?.length ? profile.crops.join(', ') : 'ধান, পাট, সবজি';
   const initials = user?.username?.charAt(0).toUpperCase() || '?';
 
   return (
@@ -42,14 +55,14 @@ export default function ProfileHubPage() {
               📍 {district}
             </p>
             <p className="text-xs text-text-secondary mt-0.5">
-              🌾 ধান, পাট, সবজি
+              🌾 {cropsLabel}
             </p>
           </div>
 
           {/* Edit button */}
           <button
             id="profile-edit-btn"
-            onClick={() => navigate('/onboarding?mode=login')}
+            onClick={() => navigate('/app/profile/edit')}
             className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center
                        text-primary hover:bg-primary/20 transition-all flex-shrink-0"
             title="প্রোফাইল সম্পাদনা"

@@ -60,6 +60,13 @@ export const login = (username, password) => {
 
 export const getMe = (signal) => request('GET', '/api/auth/me', { signal });
 
+// --- Farmer Profile (create or update by user_id) ---
+export const getFarmerProfile = (signal) =>
+  request('GET', '/api/profile', { signal });
+
+export const upsertFarmerProfile = (data) =>
+  request('POST', '/api/profile', { body: data });
+
 // --- Chat ---
 export const postChat = (message, lat, lon, image, signal) => {
   const form = new FormData();
