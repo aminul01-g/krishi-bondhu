@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { LoadingScreen } from './components/shared/LoadingStates';
 import { ErrorBoundary } from './components/shared/ErrorBoundary';
@@ -51,8 +52,9 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <Suspense fallback={<LoadingScreen />}>
-            <Routes>
+          <ToastProvider>
+            <Suspense fallback={<LoadingScreen />}>
+              <Routes>
               {/* Public routes */}
               <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
               <Route path="/onboarding" element={<PublicRoute><OnboardingPage /></PublicRoute>} />
@@ -82,7 +84,8 @@ export default function App() {
               {/* Catch-all */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </Suspense>
+            </Suspense>
+          </ToastProvider>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
