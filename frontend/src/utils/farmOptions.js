@@ -16,6 +16,16 @@ export const COMMON_CROPS = [
   'টমেটো', 'ভুট্টা', 'সরিষা', 'বেগুন', 'শশা', 'মসুর',
 ];
 
+// Emoji for each crop (used by marketplace cards / chips). Falls back to 🌾.
+export const CROP_EMOJI = {
+  'ধান': '🌾', 'গম': '🌾', 'পাট': '🪢', 'আলু': '🥔', 'পেঁয়াজ': '🧅', 'মরিচ': '🌶️',
+  'টমেটো': '🍅', 'ভুট্টা': '🌽', 'সরিষা': '🌼', 'বেগুন': '🍆', 'শশা': '🥒', 'মসুর': '🫘',
+};
+
+export function getCropEmoji(crop) {
+  return CROP_EMOJI[crop] || '🌾';
+}
+
 // Farming experience brackets. value is the integer stored in the backend.
 export const EXPERIENCE_OPTIONS = [
   { label: '১-৫ বছর',   value: 3 },
@@ -40,4 +50,29 @@ const BN_DIGITS = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮'
  */
 export function toBengaliNumerals(value) {
   return String(value).replace(/[0-9]/g, (d) => BN_DIGITS[Number(d)]);
+}
+
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/**
+ * Format a past date/time as a short Bengali "time ago" string.
+ * e.g. "৩ দিন আগে", "৫ ঘণ্টা আগে", "এইমাত্র".
+ * @param {string|number|Date} date
+ * @returns {string}
+ */
+export function formatRelativeTimeBn(date) {
+  if (!date) return '';
+  const then = new Date(date).getTime();
+  if (Number.isNaN(then)) return '';
+  const diff = Date.now() - then;
+  if (diff < MINUTE) return 'এইমাত্র';
+  if (diff < HOUR) return `${toBengaliNumerals(Math.floor(diff / MINUTE))} মিনিট আগে`;
+  if (diff < DAY) return `${toBengaliNumerals(Math.floor(diff / HOUR))} ঘণ্টা আগে`;
+  const days = Math.floor(diff / DAY);
+  if (days < 30) return `${toBengaliNumerals(days)} দিন আগে`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${toBengaliNumerals(months)} মাস আগে`;
+  return `${toBengaliNumerals(Math.floor(months / 12))} বছর আগে`;
 }

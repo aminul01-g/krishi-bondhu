@@ -5,7 +5,14 @@ from typing import Optional, List
 from datetime import datetime
 import uuid
 
-from app.models.marketplace_models import Dealer, DealerInventory, VerifiedProduct, ProductScan
+from app.models.marketplace_models import (
+    Dealer,
+    DealerInventory,
+    VerifiedProduct,
+    ProductScan,
+    MarketplaceListing,
+    ListingContactLog,
+)
 from app.db import DATABASE_URL
 from app.services.ocr_service import extract_text_from_base64, parse_label_text
 
@@ -219,3 +226,152 @@ async def list_verified_products(session: AsyncSession, limit: int = 25) -> List
         }
         for product in products
     ]
+
+
+# ---------------------------------------------------------------------------
+# Farmer-to-buyer crop sale listings
+# ---------------------------------------------------------------------------
+
+def mask_phone(phone: Optional[str]) -> Optional[str]:
+    """Mask a phone number for public display, e.g. '01712345678' -> '017XXXXX78'.
+
+    Keeps the first 3 and last 2 digits, masking everything in between. Handles
+    Bangladeshi formats ('017...', '+88017...'); safe on short/None values.
+    """
+    if not phone:
+        return None
+    digits = "".join(ch for ch in str(phone) if ch.isdigit())
+    if len(digits) < 5:
+        return digits or None
+    head, tail = digits[:3], digits[-2:]
+    masked_len = len(digits) - 5
+    return f"{head}{'X' * masked_len}{tail}"
+
+
+def _serialize_listing(listing: MarketplaceListing, mask: bool = True) -> dict:
+    phone = listing.seller_phone
+    if mask:
+        phone = mask_phone(phone)
+    return {
+        "id": str(listing.id),
+        "title": listing.title,
+        "crop": listing.crop,
+        "quantity_kg": listing.quantity_kg,
+        "price_per_kg": listing.price_per_kg,
+        "district": listing.district,
+        "upazila": listing.upazila,
+        "seller_name": listing.seller_name,
+        "phone_number": phone,
+        "posted_date": listing.posted_date.isoformat() if listing.posted_date else None,
+        "photo_url": listing.photo_url,
+        "is_active": listing.is_active,
+        "listing_type": listing.listing_type,
+        "description": listing.description,
+    }
+
+
+async def list_listings(
+    session: AsyncSession,
+    crop: Optional[str] = None,
+    district: Optional[str] = None,
+    type: Optional[str] = None,
+    limit: int = 50,
+) -> List[dict]:
+    """List active listings, optionally filtered by crop/district/type (newest first)."""
+    from sqlalchemy import select
+
+    stmt = select(MarketplaceListing).where(MarketplaceListing.is_active.is_(True))
+    if crop:
+        stmt = stmt.where(MarketplaceListing.crop == crop)
+    if district:
+        stmt = stmt.where(MarketplaceListing.district == district)
+    if type:
+        stmt = stmt.where(MarketplaceListing.listing_type == type)
+    stmt = stmt.order_by(MarketplaceListing.posted_date.desc()).limit(limit)
+
+    result = await session.execute(stmt)
+    return [_serialize_listing(row, mask=True) for row in result.scalars().all()]
+
+
+async def get_listing(session: AsyncSession, listing_id: str) -> Optional[MarketplaceListing]:
+    """Fetch a single listing by id (ORM object, no serialization)."""
+    from sqlalchemy import select
+
+    result = await session.execute(
+        select(MarketplaceListing).where(MarketplaceListing.id == listing_id)
+    )
+    return result.scalars().first()
+
+
+async def create_listing(
+    session: AsyncSession,
+    seller_id: int,
+    seller_name: str,
+    seller_phone: Optional[str],
+    crop: str,
+    quantity_kg: int,
+    price_per_kg: float,
+    district: Optional[str],
+    upazila: Optional[str],
+    description: Optional[str] = None,
+    photo_url: Optional[str] = None,
+    listing_type: str = "sell",
+) -> MarketplaceListing:
+    """Create a new sale listing. Title is derived from crop + quantity."""
+    title = f"{crop} বিক্রি হবে ({quantity_kg} কেজি)"
+    listing = MarketplaceListing(
+        seller_id=seller_id,
+        seller_name=seller_name,
+        seller_phone=seller_phone,
+        crop=crop,
+        title=title,
+        description=description,
+        quantity_kg=quantity_kg,
+        price_per_kg=price_per_kg,
+        district=district,
+        upazila=upazila,
+        photo_url=photo_url,
+        listing_type=listing_type,
+        is_active=True,
+    )
+    session.add(listing)
+    await session.commit()
+    await session.refresh(listing)
+    return listing
+
+
+async def log_listing_contact(
+    session: AsyncSession,
+    listing_id: str,
+    buyer_id: Optional[int],
+) -> Optional[MarketplaceListing]:
+    """Record a contact-intent (for analytics) and return the listing so the
+    caller can reveal the seller's unmasked phone number."""
+    listing = await get_listing(session, listing_id)
+    if not listing:
+        return None
+    session.add(ListingContactLog(listing_id=listing.id, buyer_id=buyer_id))
+    await session.commit()
+    return listing
+
+
+async def list_my_listings(session: AsyncSession, seller_id: int) -> List[dict]:
+    """List all of the current user's listings (incl. inactive), newest first."""
+    from sqlalchemy import select
+
+    result = await session.execute(
+        select(MarketplaceListing)
+        .where(MarketplaceListing.seller_id == seller_id)
+        .order_by(MarketplaceListing.posted_date.desc())
+    )
+    return [_serialize_listing(row, mask=False) for row in result.scalars().all()]
+
+
+async def delete_listing(session: AsyncSession, listing_id: str, seller_id: int) -> bool:
+    """Delete a listing after verifying ownership. Returns True if deleted."""
+    listing = await get_listing(session, listing_id)
+    if not listing or listing.seller_id != seller_id:
+        return False
+    await session.delete(listing)
+    await session.commit()
+    return True
