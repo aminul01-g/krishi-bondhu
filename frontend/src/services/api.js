@@ -5,6 +5,26 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
+/**
+ * Identify an error thrown by `request()` as a connectivity failure rather
+ * than a real API response (e.g. a 4xx/5xx with a parsed body).
+ *
+ * A truly offline fetch rejects with a TypeError ("Failed to fetch") and has no
+ * HTTP status. Any error that reached the server and came back with a status
+ * code is NOT a network error. This lets callers decide between queuing the
+ * request for later retry vs. surfacing the server's error message.
+ *
+ * @param {Error & {status?: number}} err
+ * @returns {boolean}
+ */
+export function isNetworkError(err) {
+  if (!err) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (err.name === 'TypeError') return true; // fetch() failed to connect
+  if (typeof err.status === 'number' && err.status === 0) return true;
+  return false;
+}
+
 function getAuthHeaders() {
   const token = localStorage.getItem('kb_auth_token');
   const headers = {};
@@ -38,7 +58,11 @@ async function request(method, path, { body, isForm = false, signal } = {}) {
     } else if (typeof err.detail === 'string') {
       errorMsg = err.detail;
     }
-    throw new Error(errorMsg);
+    const thrown = new Error(errorMsg);
+    // Attach status so callers can distinguish a real server response from a
+    // connectivity failure (see isNetworkError).
+    thrown.status = res.status;
+    throw thrown;
   }
 
   const contentType = res.headers.get('content-type') || '';
