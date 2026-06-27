@@ -6,6 +6,7 @@ import { getFarmerProfile } from '../services/api';
 const APP_VERSION = '1.0.0';
 
 const PROFILE_LINKS = [
+  { emoji: '💬', labelBn: 'কমিউনিটি প্রশ্ন',   path: '/app/community' },
   { emoji: '🏪', labelBn: 'মার্কেটপ্লেস',   path: '/app/marketplace' },
   { emoji: '🔗', labelBn: 'ট্রেসেবিলিটি',   path: '/app/traceability' },
   { emoji: '💡', labelBn: 'পরামর্শ ও টিপস', path: '/app/tips' },
