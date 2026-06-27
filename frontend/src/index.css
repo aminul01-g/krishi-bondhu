@@ -104,6 +104,10 @@
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .tts-banner__icon { font-size: 1.25rem; flex-shrink: 0; }
 .tts-banner__text { flex: 1; line-height: 1.4; }
 .tts-banner__actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
