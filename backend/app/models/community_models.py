@@ -30,18 +30,30 @@ class CommunityQuestion(Base):
     # Context
     crop_type = Column(String(50), nullable=False, index=True)  # rice, tomato, potato, etc.
     growth_stage = Column(String(50), index=True)  # seedling, vegetative, flowering, maturity
-    
+
+    # District (Bengali) captured at post time for district-based discovery.
+    # Stored on the question so filtering/serialization never needs the farmer profile.
+    district = Column(String(100), index=True)
+
     # Media
     photo_url = Column(String(500))
-    
+
     # Location
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
     location_geom = Column(Geometry(geometry_type='POINT', srid=4326))
-    
+
     # Vector embedding for semantic search
     embedding = Column(Vector(384))  # sentence-transformers output dimension
-    
+
+    # AI-generated answer (CrewAI). Stored once; regenerated at most hourly.
+    ai_answer = Column(Text)
+    ai_answer_generated_at = Column(DateTime)
+
+    # Denormalized counts for cheap list rendering (kept in sync on vote/reply).
+    upvotes_count = Column(Integer, default=0, index=True)
+    answers_count = Column(Integer, default=0, index=True)
+
     # Status tracking
     status = Column(String(20), default='pending', index=True)  # pending, answered, escalated, removed
     moderation_flag = Column(Boolean, default=False)
@@ -55,6 +67,7 @@ class CommunityQuestion(Base):
     # Relationships
     answers = relationship("CommunityAnswer", back_populates="question", cascade="all, delete-orphan")
     escalation = relationship("EscalationQueue", back_populates="question", uselist=False, cascade="all, delete-orphan")
+    upvotes = relationship("QuestionUpvote", back_populates="question", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index('idx_community_questions_crop_stage', 'crop_type', 'growth_stage'),
@@ -132,6 +145,33 @@ class AnswerUpvote(Base):
     
     def __repr__(self):
         return f"<AnswerUpvote {self.id} - rating {self.rating}>"
+
+
+class QuestionUpvote(Base):
+    """Toggle-style upvotes on questions (posts) for trust signals & sorting."""
+    __tablename__ = "question_upvotes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Link to question
+    question_id = Column(UUID(as_uuid=True), ForeignKey("community_questions.id"), nullable=False, index=True)
+
+    # Voter info (anonymized farmer id)
+    farmer_id_hashed = Column(String(128), nullable=False)
+
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    question = relationship("CommunityQuestion", back_populates="upvotes")
+
+    __table_args__ = (
+        # One upvote per farmer per question (toggle)
+        Index('idx_question_upvotes_unique', 'question_id', 'farmer_id_hashed', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<QuestionUpvote {self.id} - q {self.question_id}>"
 
 
 class EscalationQueue(Base):

@@ -264,14 +264,40 @@ export const postInsuranceQuote = (crop, landSize) =>
   request('POST', '/api/finance/insurance-quote', { body: { crop, land_size: landSize } });
 
 // --- Community ---
+// Legacy /questions surface (kept for backward compatibility)
 export const postCommunityQuestion = (data) =>
-  request('POST', '/api/community/questions', { body: data });
+  request('POST', `/api/community/questions`, { body: data });
 
 export const getCommunityQuestions = (query, limit = 20, signal) =>
   request('GET', `/api/community/questions?${query ? `query=${encodeURIComponent(query)}&` : ''}limit=${limit}`, { signal });
 
 export const postCommunityAnswer = (questionId, data) =>
   request('POST', `/api/community/questions/${questionId}/answers`, { body: data });
+
+// New /posts surface — discovery feed, AI answers, toggle upvotes, replies.
+export const getCommunityPosts = ({ district, crop, sort = 'new', page = 1 } = {}, signal) => {
+  const params = new URLSearchParams();
+  if (district) params.set('district', district);
+  if (crop) params.set('crop', crop);
+  if (sort) params.set('sort', sort);
+  params.set('page', page);
+  return request('GET', `/api/community/posts?${params.toString()}`, { signal });
+};
+
+export const getCommunityPost = (id, signal) =>
+  request('GET', `/api/community/posts/${id}`, { signal });
+
+export const postCommunityPost = (data) =>
+  request('POST', `/api/community/posts`, { body: data });
+
+export const togglePostUpvote = (id) =>
+  request('POST', `/api/community/posts/${id}/upvote`);
+
+export const postPostReply = (id, answerText) =>
+  request('POST', `/api/community/posts/${id}/answers`, { body: { answer_text: answerText } });
+
+export const generatePostAiAnswer = (id) =>
+  request('POST', `/api/community/posts/${id}/ai_answer`);
 
 // --- Marketplace ---
 export const getDealers = (lat, lon, signal) =>
