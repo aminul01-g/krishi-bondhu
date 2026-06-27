@@ -256,6 +256,27 @@ export const getDealers = (lat, lon, signal) =>
 export const postScanProduct = (data) =>
   request('POST', '/api/marketplace/scan', { body: data });
 
+export const getListings = ({ crop, district, type } = {}, signal) => {
+  const params = new URLSearchParams();
+  if (crop) params.set('crop', crop);
+  if (district) params.set('district', district);
+  if (type) params.set('type', type);
+  const qs = params.toString();
+  return request('GET', `/api/marketplace/listings${qs ? `?${qs}` : ''}`, { signal });
+};
+
+export const postListing = (data) =>
+  request('POST', '/api/marketplace/listings', { body: data });
+
+export const postListingContact = (id) =>
+  request('POST', `/api/marketplace/listings/${id}/contact`);
+
+export const getMyListings = (signal) =>
+  request('GET', '/api/marketplace/listings/mine', { signal });
+
+export const deleteListing = (id) =>
+  request('DELETE', `/api/marketplace/listings/${id}`);
+
 // --- Planner ---
 export const postGeneratePlan = (crop, lat, lon) =>
   request('POST', '/api/planner/generate', { body: { crop, lat, lon } });

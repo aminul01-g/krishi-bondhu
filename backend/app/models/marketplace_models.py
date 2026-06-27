@@ -13,6 +13,50 @@ from app.models.db_models import Base
 from geoalchemy2 import Geometry
 
 
+class MarketplaceListing(Base):
+    """Farmer-to-buyer crop sale listing (direct sales, bypassing middlemen)."""
+    __tablename__ = "marketplace_listings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    seller_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    seller_name = Column(String(200), nullable=False)          # denormalized username
+    seller_phone = Column(String(20), nullable=True)           # denormalized from farmer profile
+
+    crop = Column(String(100), nullable=False, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    quantity_kg = Column(Integer, nullable=False)
+    price_per_kg = Column(Float, nullable=False)
+    district = Column(String(100), nullable=True, index=True)
+    upazila = Column(String(100), nullable=True)
+    photo_url = Column(String(500), nullable=True)
+
+    listing_type = Column(String(20), default="sell", index=True)  # 'sell' (future: 'buy')
+    is_active = Column(Boolean, default=True, index=True)
+    posted_date = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_listings_crop_district", "crop", "district"),
+        Index("idx_listings_active_posted", "is_active", "posted_date"),
+    )
+
+    def __repr__(self):
+        return f"<MarketplaceListing {self.crop} {self.quantity_kg}kg by {self.seller_name}>"
+
+
+class ListingContactLog(Base):
+    """Analytics log of buyer contact-intent on a listing."""
+    __tablename__ = "listing_contact_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    listing_id = Column(UUID(as_uuid=True), ForeignKey("marketplace_listings.id"), nullable=False, index=True)
+    buyer_id = Column(Integer, nullable=True)                  # = current_user.id
+    contacted_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f"<ListingContactLog listing={self.listing_id} at={self.contacted_at}>"
+
+
 class Dealer(Base):
     """Agro-input dealer directory entry"""
     __tablename__ = "dealers"
