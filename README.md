@@ -16,6 +16,17 @@ KrishiBondhu is an AI-powered agricultural assistant designed specifically for f
 
 ## System Architecture
 
+KrishiBondhu uses **two complementary backend paths**:
+
+1. **Conversational path** — free-text/voice chat is routed through a CrewAI
+   crew led by the *Bengali Interpreter*, which delegates to specialist LLM
+   agents (agronomist, market, weather, …) to compose a natural-language reply.
+2. **Feature path** — the structured feature endpoints (soil, water, market,
+   finance, community, emergency, planner, …) call the **service layer
+   directly**. This is where the deterministic domain logic lives: the 3-tier
+   vision fallback, the Hargreaves-Samani ET₀ model, Prophet price trends, the
+   Random-Forest yield model, credit scoring, etc.
+
 ```mermaid
 graph TD
     %% Frontend
@@ -31,37 +42,43 @@ graph TD
 
     %% Backend Entry
     subgraph Backend [FastAPI]
-        Router[API Endpoints]
-        Router --> CrewAI[CrewAI Orchestrator]
+        ChatRouter[Chat Endpoints]
+        FeatureRouter[Feature Endpoints]
     end
 
-    API_SVC -- HTTP/REST --> Router
+    API_SVC -- HTTP/REST --> ChatRouter
+    API_SVC -- HTTP/REST --> FeatureRouter
 
-    %% CrewAI & Agents
-    subgraph Agents [Intelligent Agents]
+    %% CrewAI & Agents (conversational path)
+    subgraph Agents [CrewAI LLM Agents]
+        Interpreter[Bengali Interpreter -- router]
         Agronomist[AgronomistExpert]
-        MarketBot[MarketAnalyst]
-        WeatherBot[WeatherForecaster]
-        YieldPlanner[YieldPlanner]
-        Emergency[EmergencyCoordinator]
+        MarketBot[MarketAdvisor]
+        WeatherBot[WeatherAdvisor]
+        Emergency[EmergencyResponse]
     end
 
-    CrewAI --> Agents
+    ChatRouter --> Interpreter
+    Interpreter --> Agronomist
+    Interpreter --> MarketBot
+    Interpreter --> WeatherBot
+    Interpreter --> Emergency
 
-    %% Services & Intelligence
+    %% Services & Intelligence (feature path — deterministic logic)
     subgraph Services [Service Layer]
         VisionSvc[VisionService - 3 Tier Fallback]
         WeatherSvc[WeatherService - Hargreaves-Samani]
         MarketSvc[MarketService - Prophet Trend]
         YieldSvc[YieldService - Random Forest]
+        FinanceSvc[FinanceService - Credit Scoring]
         SusSvc[SustainabilityService]
     end
 
-    Agents --> Services
+    FeatureRouter --> Services
 
     %% Data & Infrastructure
     subgraph Infrastructure [Data & Persistence]
-        PG[(PostgreSQL - FarmDB)]
+        PG[(PostgreSQL + PostGIS/pgvector)]
         Redis[(Redis - Caching)]
         ML_Models[[Yield Model .pkl]]
     end
@@ -75,10 +92,17 @@ graph TD
         Groq(Groq Llama Vision)
     end
 
+    Agents -.uses.-> Groq
     WeatherSvc --> NASA
     VisionSvc --> HF
     VisionSvc --> Groq
 ```
+
+> **Note:** The CrewAI agents are LLM reasoning personas — they do **not** call
+> the service layer through bound tools. Deterministic domain calculations are
+> reached via the feature endpoints → service layer. Keeping the two paths
+> distinct is intentional; see [`PROJECT_AUDIT_REPORT.md`](./PROJECT_AUDIT_REPORT.md)
+> for the rationale and roadmap.
 
 ## Features
 
