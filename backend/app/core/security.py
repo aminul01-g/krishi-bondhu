@@ -18,17 +18,29 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Application secrets & JWT config
 # ---------------------------------------------------------------------------
-DEFAULT_SECRET_KEY = "krishibondhu_super_secret_key_change_this_in_production"
-SECRET_KEY = os.getenv("SECRET_KEY", DEFAULT_SECRET_KEY)
-if SECRET_KEY == DEFAULT_SECRET_KEY:
+from app.core.config import settings, DEFAULT_SECRET_KEY
+
+SECRET_KEY = settings.secret_key
+
+if settings.using_default_secret:
+    # In production, refuse to run with the shipped default: it would let anyone
+    # forge JWTs for any username and impersonate any user. We only tolerate the
+    # default in explicit dev/test mode, where it keeps local setup friction low.
+    if settings.is_production:
+        raise RuntimeError(
+            "SECRET_KEY is not configured and the insecure default is in use. "
+            "Refusing to start in production. Set a strong SECRET_KEY in the "
+            "environment (e.g. `openssl rand -hex 32`), or set DEBUG=true for "
+            "local development."
+        )
     logger.warning(
-        "SECRET_KEY is not configured. Using an insecure default secret. "
-        "Set SECRET_KEY in the environment before deploying to production."
+        "SECRET_KEY is not configured; using the insecure default secret. "
+        "This is allowed ONLY because DEBUG/ENVIRONMENT indicates dev/test. "
+        "Set SECRET_KEY before deploying to production."
     )
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
-)  # Default 24 h
+
+ALGORITHM = settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes  # Default 24 h
 
 
 # ---------------------------------------------------------------------------

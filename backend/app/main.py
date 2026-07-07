@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
@@ -53,9 +54,17 @@ logger = get_logger("main")
 app = FastAPI(title="KrishiBondhu API")
 
 # --- Rate Limiting ---
-limiter = Limiter(key_func=get_remote_address)
+# The shared limiter (app.core.rate_limit) is imported so routers can attach
+# stricter per-route limits using the same instance. A generous global default
+# catches abusive bursts (credential brute-force, unmetered LLM/DB hammering) on
+# EVERY route; hot/sensitive endpoints keep stricter @limiter.limit overrides.
+from app.core.rate_limit import limiter, DEFAULT_LIMITS
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# SlowAPIMiddleware is what actually enforces the global default_limits across
+# all routes (per-route decorators work without it, but defaults do not).
+if DEFAULT_LIMITS:
+    app.add_middleware(SlowAPIMiddleware)
 
 # --- Global Error Handling ---
 
@@ -160,7 +169,8 @@ async def save_conversation_to_db(
     reply_text: str,
     metadata: dict = None,
     tts_path: str = None,
-    media_url: str = None
+    media_url: str = None,
+    external_id: str = None,
 ):
     try:
         if not user_db_id:
@@ -178,41 +188,46 @@ async def save_conversation_to_db(
         await db.refresh(conv)
         logger.debug(f"Saved conversation id={conv.id} for user_id={user_db_id}")
 
-        try:
-            await ws_manager.broadcast({"type": "history_updated", "user_id": user_db_id})
-        except Exception as broadcast_error:
-            logger.warning("WebSocket broadcast failed", error=str(broadcast_error), user_id=user_db_id)
+        # Notify ONLY the owning user's sockets. Previously this fanned out to
+        # every connected client (an activity/user-id side-channel leak).
+        if external_id:
+            try:
+                await ws_manager.send_to_user(
+                    external_id, {"type": "history_updated"}
+                )
+            except Exception as broadcast_error:
+                logger.warning("WebSocket notify failed", error=str(broadcast_error), user_id=user_db_id)
 
         return conv.id
     except Exception as e:
         logger.error("Failed to save conversation", error=str(e), user_id=user_db_id)
         return None
 
+from app.core.config import settings
+
 def _parse_allowed_origins() -> list[str]:
-    raw_origins = os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost,http://localhost:3000,https://huggingface.co,https://krishibondhu.hf.space"
-    )
-    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-    if "*" in origins:
-        if os.getenv("CORS_ALLOW_CREDENTIALS", "true").lower() == "true":
-            logger.warning(
-                "CORS_ALLOW_ORIGINS contains '*', but credentials are allowed. Removing wildcard for security."
-            )
-            origins = [origin for origin in origins if origin != "*"]
-        else:
-            return ["*"]
-    if not origins:
+    """Resolve CORS origins from the central settings object.
+
+    The wildcard-vs-credentials safety handling now lives in
+    ``settings.cors_origins_list``; we keep this thin wrapper so the log
+    warnings (useful in prod misconfig) stay at the composition root.
+    """
+    raw_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+    if "*" in raw_origins and settings.cors_allow_credentials:
+        logger.warning(
+            "CORS_ALLOW_ORIGINS contains '*', but credentials are allowed. Removing wildcard for security."
+        )
+    origins = settings.cors_origins_list
+    if not raw_origins:
         logger.warning(
             "No valid CORS origins configured; falling back to localhost defaults."
         )
-        origins = ["http://localhost", "http://localhost:3000"]
     return origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_parse_allowed_origins(),
-    allow_credentials=True,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -231,17 +246,41 @@ async def create_database_tables():
         except Exception as e:
             logger.warning(f"HuggingFace Hub login failed: {e}")
 
+    # Schema ownership (M6):
+    #   * PostgreSQL (production): Alembic is the single source of truth. Migrations
+    #     run via `alembic upgrade head` (Docker CMD). We do NOT run create_all,
+    #     which would create untracked tables and mask pending migrations / schema
+    #     drift. Set AUTO_CREATE_TABLES=true to force the old behavior if needed.
+    #   * SQLite (local dev / HF Space fallback): create_all bootstraps the full
+    #     model schema so a fresh checkout runs without a migration step (the
+    #     Postgres migrations can't fully replay on SQLite due to PostGIS/pgvector
+    #     column types).
+    is_postgres = "postgresql" in DATABASE_URL.lower()
+    _auto = os.getenv("AUTO_CREATE_TABLES", "auto").strip().lower()
+    should_create_all = _auto in ("1", "true", "yes") or (_auto == "auto" and not is_postgres)
+
     try:
         async with engine.begin() as conn:
-            if "postgresql" in DATABASE_URL.lower():
+            if is_postgres:
+                # Idempotent; also ensured by migration 0007, but created here as a
+                # safety net for migrations that assume the extensions exist.
                 await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
                 await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-                print("[INFO] PostGIS and pgvector extensions ensured.")
+                logger.info("PostGIS and pgvector extensions ensured.")
 
-            await conn.run_sync(Base.metadata.create_all)
-            print("[INFO] Database tables created or already exist.")
+            if should_create_all:
+                await conn.run_sync(Base.metadata.create_all)
+                logger.info(
+                    "Database schema ensured via create_all (non-Alembic path).",
+                    dialect="sqlite" if not is_postgres else "postgresql",
+                )
+            else:
+                logger.info(
+                    "Skipping create_all; Alembic owns the schema. "
+                    "Run `alembic upgrade head` to apply migrations.",
+                )
     except Exception as e:
-        print(f"[ERROR] Database initialization failed: {e}")
+        logger.error("Database initialization failed", error=str(e))
 
 app.include_router(api_routes.router, prefix="/api")
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])
@@ -328,33 +367,101 @@ async def stop_scheduler():
     logger.info("Scheduler stopped")
 
 # --- WebSocket Setup for Agent Status ---
-from typing import List
+from typing import List, Dict
+
+# Cap total concurrent sockets to bound resource use from anonymous/abusive clients.
+_WS_MAX_CONNECTIONS = int(os.getenv("WS_MAX_CONNECTIONS", "500"))
+
 
 class ConnectionManager:
+    """Tracks live sockets keyed by the authenticated user's external_id so that
+    broadcasts can be scoped to their owner instead of fanned out to everyone.
+    """
+
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        # external_id -> list of that user's sockets (multi-device/tab support)
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket):
+    @property
+    def total(self) -> int:
+        return sum(len(conns) for conns in self.active_connections.values())
+
+    async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self.active_connections.setdefault(user_id, []).append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, websocket: WebSocket, user_id: str):
+        conns = self.active_connections.get(user_id)
+        if not conns:
+            return
+        if websocket in conns:
+            conns.remove(websocket)
+        if not conns:
+            self.active_connections.pop(user_id, None)
 
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            await connection.send_json(message)
+    async def send_to_user(self, user_id: str, message: dict):
+        """Deliver a message only to the sockets owned by ``user_id``."""
+        conns = list(self.active_connections.get(user_id, []))
+        for connection in conns:
+            try:
+                await connection.send_json(message)
+            except Exception as exc:
+                logger.warning("WebSocket send failed; dropping connection", error=str(exc))
+                self.disconnect(connection, user_id)
+
 
 ws_manager = ConnectionManager()
 
+
+async def _authenticate_websocket(websocket: WebSocket) -> "User | None":
+    """Validate the JWT supplied on the WS handshake.
+
+    The token may arrive either as a ``?token=`` query parameter or via the
+    ``Authorization: Bearer <token>`` header. Returns the matching User, or
+    None if authentication fails (caller closes the socket).
+    """
+    from app.core.security import decode_access_token
+
+    token = websocket.query_params.get("token")
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:]
+    if not token:
+        return None
+
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    username = payload.get("sub")
+    if not username:
+        return None
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.username == username))
+        return result.scalars().first()
+
+
 @app.websocket("/api/ws/agent_status")
 async def websocket_endpoint(websocket: WebSocket):
-    await ws_manager.connect(websocket)
+    # Enforce a global connection cap before doing any auth work.
+    if ws_manager.total >= _WS_MAX_CONNECTIONS:
+        await websocket.close(code=1013)  # 1013 = Try Again Later
+        return
+
+    user = await _authenticate_websocket(websocket)
+    if user is None:
+        # 1008 = Policy Violation (auth failure). Reject before accepting frames.
+        await websocket.close(code=1008)
+        return
+
+    user_id = user.external_id
+    await ws_manager.connect(websocket, user_id)
     try:
         while True:
-            data = await websocket.receive_text()
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        ws_manager.disconnect(websocket, user_id)
 
 @app.post('/api/upload_audio')
 @limiter.limit("10/minute")
@@ -450,7 +557,8 @@ async def upload_audio(
             reply_text,
             metadata={"gps": initial_state["gps"]},
             tts_path=None,
-            media_url=image_path
+            media_url=image_path,
+            external_id=current_user.external_id,
         )
 
         await MemoryService.extract_and_save_facts(
@@ -529,7 +637,8 @@ async def upload_image(
             question,
             reply_text,
             metadata={"gps": initial_state["gps"]},
-            media_url=image_path
+            media_url=image_path,
+            external_id=current_user.external_id,
         )
 
         await MemoryService.extract_and_save_facts(
@@ -642,7 +751,8 @@ async def chat(
             message,
             reply_text,
             metadata={"gps": initial_state["gps"]},
-            media_url=image_path
+            media_url=image_path,
+            external_id=current_user.external_id,
         )
 
         await MemoryService.extract_and_save_facts(
@@ -769,6 +879,7 @@ async def chat_stream(
                 message,
                 reply_text,
                 metadata={"gps": initial_state["gps"]},
+                external_id=current_user.external_id,
             )
 
             try:
@@ -801,18 +912,33 @@ async def chat_stream(
 async def get_tts(path: str):
     from urllib.parse import unquote
     from app.api.utils import UPLOAD_DIR
-    import re
     from fastapi import Response
-    decoded_path = unquote(path)
-    filename = os.path.basename(decoded_path)
-    if os.path.exists(decoded_path):
-        return FileResponse(decoded_path, media_type='audio/mpeg', filename=filename)
-    upload_dir_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(upload_dir_path):
-        return FileResponse(upload_dir_path, media_type='audio/mpeg', filename=filename)
+
+    # SECURITY: never trust the caller-supplied directory component. A previous
+    # implementation returned any absolute path that existed on disk, which was
+    # an arbitrary-file-read vulnerability (e.g. ?path=/etc/passwd). We now use
+    # only the basename and serve strictly from within UPLOAD_DIR, verifying the
+    # resolved real path stays inside the allowed directory (defends against
+    # symlink / ".." tricks in the filename itself).
+    filename = os.path.basename(unquote(path))
+    if not filename:
+        return Response(status_code=204)
+
+    upload_root = os.path.realpath(UPLOAD_DIR)
+    candidate = os.path.realpath(os.path.join(upload_root, filename))
+
+    # Containment check: candidate must live under upload_root.
+    if os.path.commonpath([upload_root, candidate]) != upload_root:
+        logger.warning("Rejected out-of-bounds TTS path request", requested=path)
+        return Response(status_code=204)
+
+    if os.path.isfile(candidate):
+        return FileResponse(candidate, media_type='audio/mpeg', filename=filename)
     return Response(status_code=204)
 
 @app.get("/{full_path:path}")
+@limiter.exempt  # Static/SPA asset serving: one page load fetches many chunks;
+                 # the per-IP default limit would break loads behind shared NAT.
 async def serve_spa(full_path: str):
     if full_path.startswith("api"):
         return JSONResponse({"detail": "Not Found"}, status_code=404)

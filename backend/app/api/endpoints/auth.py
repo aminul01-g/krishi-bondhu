@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -12,6 +12,7 @@ from app.core.security import (
     verify_password
 )
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import limiter
 from pydantic import BaseModel, Field
 
 class UserRegister(BaseModel):
@@ -21,10 +22,12 @@ class UserRegister(BaseModel):
 router = APIRouter()
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user: UserRegister = Body(...), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, user: UserRegister = Body(...), db: AsyncSession = Depends(get_db)):
     """
-    Registers a new user. 
+    Registers a new user.
     Accepts credentials in the JSON request body, not query parameters.
+    Rate-limited to curb automated account-creation abuse.
     """
     # Check if user already exists
     result = await db.execute(select(User).where(User.username == user.username))
@@ -50,7 +53,9 @@ async def register(user: UserRegister = Body(...), db: AsyncSession = Depends(ge
     return {"msg": "User created successfully", "username": new_user.username}
 
 @router.post("/token")
+@limiter.limit("10/minute")
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
