@@ -108,11 +108,14 @@ class TestYieldPredictionFallback:
 
 
 class TestDamageAssessmentFallback:
-    """Test crop damage tool fallback when CV2 is unavailable."""
+    """Test crop damage assessment fallback when CV2 / models are unavailable.
+
+    Exercises the production VisionService path directly (the former
+    CropDamageAssessmentTool was a thin, unused wrapper over this service).
+    """
 
     def test_damage_no_image(self):
-        """Should return mock assessment when no image provided."""
-        from app.tools.emergency_tool import CropDamageAssessmentTool
-        tool = CropDamageAssessmentTool()
-        result = tool._run(image_path="none", crop_type="rice")
-        assert "damage" in result.lower() or "Damage" in result
+        """Should return a mock assessment when no usable image is provided."""
+        from app.services.vision_service import VisionService
+        result = VisionService().assess_damage(image_path="none", crop_type="rice")
+        assert "damage" in result.lower()

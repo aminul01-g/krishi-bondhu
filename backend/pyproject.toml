@@ -59,6 +59,17 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
 ]
 
+[tool.pytest.ini_options]
+# asyncio_mode = "auto" lets plain `async def test_*` run without decorating
+# every test, and (critically) lets the async fixtures in tests/conftest.py be
+# handled natively. Without this, modern pytest-asyncio (>=1.0) raises
+# "requested an async fixture ... with no plugin or hook that handled it" and
+# every async test errors at setup. Required for the suite to run at all.
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "--tb=short"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
