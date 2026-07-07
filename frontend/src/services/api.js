@@ -149,6 +149,8 @@ export async function streamChat(message, lat, lon, onChunk, onDone, onError) {
   let buffer = '';
 
   try {
+    // Intentional read loop: exits via `break` when the SSE stream ends (done).
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;

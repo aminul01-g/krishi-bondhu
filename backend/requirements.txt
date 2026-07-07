@@ -37,8 +37,13 @@ accelerate==1.13.0
 bitsandbytes==0.49.2
 
 # Data Science & ML
+# torchvision's minor version tracks torch's: torch 2.11.x pairs with
+# torchvision 0.26.x. The previous pin (0.16.0) required torch==2.1.0, which
+# conflicted with torch==2.11.0 and broke `pip install -r requirements.txt`
+# (and the CI dependency step). torchvision is a transitive need (ultralytics);
+# it is not imported directly by the app.
 torch==2.11.0
-torchvision==0.16.0
+torchvision==0.26.0
 pandas==3.0.2
 numpy==1.26.4
 scikit-learn==1.8.0

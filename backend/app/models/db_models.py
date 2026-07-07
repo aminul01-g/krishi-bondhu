@@ -15,7 +15,10 @@ class User(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=True)
+    # Indexed: conversation history is queried by user_id on every chat request
+    # (see main.py chat/stream history lookups). Without this index those
+    # filters degrade to sequential scans as the table grows.
+    user_id = Column(Integer, nullable=True, index=True)
     transcript = Column(Text, nullable=True)
     tts_path = Column(String, nullable=True)
     media_url = Column(String, nullable=True)  # Added in migration 0002
