@@ -7,6 +7,9 @@ from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from app.models.db_models import User
 from app.core.dependencies import get_current_user
+from app.core.logging import get_logger
+
+logger = get_logger("memory_api")
 
 router = APIRouter()
 
@@ -58,8 +61,9 @@ async def get_farm_memory(
         if p_date_str:
             try:
                 p_date = datetime.fromisoformat(p_date_str)
-            except:
-                pass
+            except (ValueError, TypeError):
+                # Unparseable planting date from stored facts — leave p_date None.
+                logger.debug("Could not parse planting_date fact", value=p_date_str)
         
         # Mock current conditions for the service
         current_cond = {"temp": 31, "humidity": 78, "moisture": 22}

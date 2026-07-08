@@ -92,6 +92,8 @@ jobs:
           ENVIRONMENT: "test"
         run: |
           cd backend
+          # --cov-fail-under floor is set in pyproject.toml [tool.coverage.report]
+          # (currently 15%, a conservative ratchet — raise it over time).
           pytest --tb=short -q --cov=app --cov-report=term-missing --cov-report=xml
       - name: Upload coverage artifact
         if: always()

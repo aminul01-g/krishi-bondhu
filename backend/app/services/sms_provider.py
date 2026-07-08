@@ -2,6 +2,9 @@
 
 import os
 from typing import Dict
+from app.core.logging import get_logger
+
+logger = get_logger("sms_provider")
 
 try:
     from dotenv import load_dotenv
@@ -19,7 +22,7 @@ class SMSProviderBase:
 
 class MockSMSProvider(SMSProviderBase):
     async def send(self, phone: str, message: str) -> Dict:
-        print(f"[MOCK SMS] To={phone} Message={message}")
+        logger.info("Mock SMS", to=phone, message=message)
         return {"success": True, "provider": "mock", "phone": phone, "message": message}
 
 
@@ -51,7 +54,7 @@ class NexmoSMSProvider(SMSProviderBase):
                 else:
                     return {"success": False, "provider": "nexmo", "error": data}
         except Exception as e:
-            print(f"[NEXMO SMS ERROR] {e}")
+            logger.error("Nexmo SMS error", error=str(e))
             return {"success": False, "provider": "nexmo", "error": str(e)}
 
 

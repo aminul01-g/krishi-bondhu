@@ -307,49 +307,103 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 scheduler = AsyncIOScheduler()
 
+_DEFAULT_GPS = {"lat": 23.8103, "lon": 90.4125}  # Dhaka
+_ALERT_JOB_CONCURRENCY = int(os.getenv("ALERT_JOB_CONCURRENCY", "8"))
+
+
 async def daily_notification_job():
     """
     Morning job to generate irrigation and pest alerts for all active users.
+
+    Performance & reliability (M5):
+    - One query resolves each user's last known GPS instead of a per-user
+      Conversation lookup (was N+1).
+    - Pest-risk calls (network I/O to the weather service) run with bounded
+      concurrency rather than serially.
+    - A failure for one user is logged and skipped; it no longer aborts the
+      whole batch.
     """
+    from app.services.alert_service import AlertService
+
     logger.info("Running daily irrigation and pest risk notification job...")
     async with AsyncSessionLocal() as db:
         try:
-            # 1. Fetch all users
-            result = await db.execute(select(User))
-            users = result.scalars().all()
+            users = (await db.execute(select(User))).scalars().all()
+            if not users:
+                logger.info("Daily alert job: no users to process.")
+                return
 
-            for user in users:
-                # 2. Get last known location for the user from conversations
-                conv_result = await db.execute(
-                    select(Conversation)
-                    .where(Conversation.user_id == user.id)
-                    .order_by(desc(Conversation.created_at))
-                    .limit(1)
+            # --- Resolve latest GPS per user in a single pass (no N+1) --------
+            # Pull the most-recent conversation row per user via a window
+            # function, portable across PostgreSQL and SQLite (both support it).
+            from sqlalchemy import func as sa_func
+
+            rn = (
+                sa_func.row_number()
+                .over(
+                    partition_by=Conversation.user_id,
+                    order_by=desc(Conversation.created_at),
                 )
-                last_conv = conv_result.scalars().first()
+                .label("rn")
+            )
+            subq = select(Conversation.user_id, Conversation.meta_data, rn).subquery()
+            latest_rows = (
+                await db.execute(select(subq).where(subq.c.rn == 1))
+            ).all()
 
-                gps = {"lat": 23.8103, "lon": 90.4125} # Default to Dhaka
-                if last_conv and last_conv.meta_data and last_conv.meta_data.get("gps"):
-                    gps = last_conv.meta_data.get("gps")
+            gps_by_user_id: dict = {}
+            for row in latest_rows:
+                meta = row.meta_data or {}
+                if isinstance(meta, dict) and meta.get("gps"):
+                    gps_by_user_id[row.user_id] = meta["gps"]
 
-                # 3. We've moved to the Service Layer. We now use the AlertService here.
-                from app.services.alert_service import AlertService
-                alert_svc = AlertService()
-                risk_data = await alert_svc.calculate_pest_risk(crop="rice", lat=gps["lat"], lon=gps["lon"])
+            # --- Compute pest risk with bounded concurrency -------------------
+            alert_svc = AlertService()
+            semaphore = asyncio.Semaphore(max(1, _ALERT_JOB_CONCURRENCY))
 
-                advice = f"Daily Pest Alert: {risk_data['risk_level']} risk. {risk_data['alerts'][0]}"
+            async def _risk_for(user) -> "tuple | None":
+                gps = gps_by_user_id.get(user.id, _DEFAULT_GPS)
+                async with semaphore:
+                    try:
+                        risk = await alert_svc.calculate_pest_risk(
+                            crop="rice", lat=gps["lat"], lon=gps["lon"]
+                        )
+                        advice = f"Daily Pest Alert: {risk['risk_level']} risk. {risk['alerts'][0]}"
+                        return (user.external_id, advice)
+                    except Exception as user_err:
+                        # Per-user isolation: one failure must not sink the batch.
+                        logger.warning(
+                            "Daily alert failed for user; skipping",
+                            user_id=user.external_id,
+                            error=str(user_err),
+                        )
+                        return None
 
-                new_log = IrrigationLog(
-                    user_id=user.external_id,
-                    soil_moisture_index=0.42,
-                    advice=advice
+            results = await asyncio.gather(*[_risk_for(u) for u in users])
+
+            processed = 0
+            for item in results:
+                if item is None:
+                    continue
+                external_id, advice = item
+                db.add(
+                    IrrigationLog(
+                        user_id=external_id,
+                        soil_moisture_index=0.42,
+                        advice=advice,
+                    )
                 )
-                db.add(new_log)
+                processed += 1
 
             await db.commit()
-            logger.info(f"Successfully processed users: {len(users)}")
+            logger.info(
+                "Daily alert job complete",
+                users_total=len(users),
+                logs_written=processed,
+            )
         except Exception as e:
-            logger.error(f"Scheduler error: {e}")
+            await db.rollback()
+            logger.exception("Scheduler error in daily_notification_job", error=str(e))
 
 @app.on_event("startup")
 async def start_scheduler():

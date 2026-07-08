@@ -96,8 +96,9 @@ class WeatherService:
         if self.redis:
             try:
                 return self.redis.get(key)
-            except Exception:
-                pass
+            except Exception as e:
+                # Redis unavailable — fall back to the in-process cache.
+                logger.debug("Redis cache get failed; using in-memory cache: %s", e)
         return self._mem_cache.get(key)
 
     def _cache_set(self, key: str, value: str, ttl: int = 3600) -> None:
@@ -105,8 +106,8 @@ class WeatherService:
             try:
                 self.redis.setex(key, ttl, value)
                 return
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Redis cache set failed; using in-memory cache: %s", e)
         self._mem_cache[key] = value
 
     # ------------------------------------------------------------------

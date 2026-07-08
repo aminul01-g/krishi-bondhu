@@ -5,6 +5,9 @@ from app.db import AsyncSessionLocal
 from app.models.community_models import CommunityQuestion, AgriculturalExpert
 from app.models.marketplace_models import Dealer, DealerInventory, VerifiedProduct
 from app.models.emergency_models import InsuranceProvider
+from app.core.logging import get_logger
+
+logger = get_logger("seed")
 
 
 async def seed_phase3_data():
@@ -142,7 +145,7 @@ async def seed_phase3_data():
             session.add(provider)
 
         await session.commit()
-        print("Seeded Phase 3 sample data successfully.")
+        logger.info("Seeded Phase 3 sample data successfully")
 
 
 if __name__ == "__main__":
