@@ -354,8 +354,14 @@ async def daily_notification_job():
             gps_by_user_id: dict = {}
             for row in latest_rows:
                 meta = row.meta_data or {}
-                if isinstance(meta, dict) and meta.get("gps"):
-                    gps_by_user_id[row.user_id] = meta["gps"]
+                gps = meta.get("gps") if isinstance(meta, dict) else None
+                # Only accept a GPS fix with real numeric coordinates. Uploads
+                # without location persist {"lat": None, "lon": None}, which is
+                # truthy but useless — skip it so the Dhaka default applies
+                # instead of calling the weather service with lat/lon = None.
+                if isinstance(gps, dict) and isinstance(gps.get("lat"), (int, float)) \
+                        and isinstance(gps.get("lon"), (int, float)):
+                    gps_by_user_id[row.user_id] = gps
 
             # --- Compute pest risk with bounded concurrency -------------------
             alert_svc = AlertService()
@@ -515,6 +521,11 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Always deregister, even on abnormal closes (ConnectionClosedError,
+        # CancelledError on shutdown, etc.) — otherwise a dead socket lingers
+        # in the manager and permanently consumes a connection-cap slot.
         ws_manager.disconnect(websocket, user_id)
 
 @app.post('/api/upload_audio')
