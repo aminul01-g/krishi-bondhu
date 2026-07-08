@@ -65,6 +65,56 @@
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
 
+/* ─── Landing / Auth redesign helpers ─────────────────────────── */
+
+/* Soft field-crop gradient used behind hero + auth brand panel */
+.brand-gradient {
+  background:
+    radial-gradient(1200px 400px at 100% -10%, rgba(212,160,23,0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(64,145,108,0.25), transparent 55%),
+    linear-gradient(135deg, #1B4332 0%, #2D6A4F 55%, #40916C 100%);
+}
+
+/* Subtle dotted texture overlay */
+.dot-texture {
+  background-image: radial-gradient(rgba(255,255,255,0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Entrance animations (respect reduced-motion below) */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.16,1,0.3,1) both; }
+.animate-fade-in { animation: fade-in 0.8s ease both; }
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.16s; }
+.delay-3 { animation-delay: 0.24s; }
+.delay-4 { animation-delay: 0.32s; }
+
+/* Feature card hover lift */
+.feature-card {
+  @apply bg-surface rounded-card border border-border p-5 shadow-card;
+  transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.feature-card:hover {
+  transform: translateY(-4px);
+  @apply shadow-elevated border-primary/30;
+}
+
+/* Password strength meter segments */
+.pw-seg { @apply h-1.5 flex-1 rounded-full bg-border transition-colors duration-300; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up, .animate-fade-in { animation: none; }
+  .feature-card:hover { transform: none; }
+}
+
 /* Pulse animation for recording */
 @keyframes pulse-record {
   0%, 100% { transform: scale(1); opacity: 1; }
