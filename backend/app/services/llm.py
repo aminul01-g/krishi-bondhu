@@ -10,6 +10,9 @@ from app.core.prompts import (
 )
 from app.services.audio import detect_language_from_text
 from app.llm import init_llm_provider
+from app.core.logging import get_logger
+
+logger = get_logger("llm")
 
 load_dotenv()
 
@@ -62,7 +65,7 @@ def call_huggingface_llm(prompt: str, system_instruction: str = None) -> str:
 
         raise Exception("Empty response from Hugging Face chat completion.")
     except Exception as chat_error:
-        print(f"[WARN] Hugging Face chat completion failed: {chat_error}")
+        logger.warning("Hugging Face chat completion failed", error=str(chat_error))
         try:
             response = client.text_generation(
                 prompt,
@@ -77,7 +80,7 @@ def call_huggingface_llm(prompt: str, system_instruction: str = None) -> str:
 
             raise Exception("Empty response from Hugging Face text generation.")
         except Exception as generation_error:
-            print(f"[ERROR] Hugging Face text generation also failed: {generation_error}")
+            logger.error("Hugging Face text generation also failed", error=str(generation_error))
             raise
 
 
@@ -88,7 +91,7 @@ def call_llm(prompt: str, system_instruction: str = None) -> str:
         full_prompt = f"{system_instruction}\n\n{prompt}" if system_instruction else prompt
         return llm_provider.generate_content(full_prompt)
     except Exception as e:
-        print(f"[WARN] Shared LLM provider failed: {e}")
+        logger.warning("Shared LLM provider failed", error=str(e))
         return get_fallback_response(prompt, system_instruction)
 
 def get_fallback_response(prompt: str, system_instruction: str = None) -> str:
@@ -140,7 +143,7 @@ def call_gemini_llm(prompt: str, system_instruction: str = None) -> str:
 
         return result_text.strip()
     except Exception as e:
-        print(f"[ERROR] Gemini LLM call failed: {e}")
+        logger.error("Gemini LLM call failed", error=str(e))
         raise
 
 def intent_node(state):
@@ -170,7 +173,7 @@ def intent_node(state):
         
         parsed = json.loads(response_text)
     except Exception as e:
-        print(f"Error in intent extraction: {e}")
+        logger.error("Error in intent extraction", error=str(e))
         parsed = {"crop": None, "symptoms": transcript, "need_image": False, "note": transcript}
     
     updates = {
@@ -226,7 +229,7 @@ def reasoning_node(state):
     try:
         reply = call_llm(prompt, system_instruction)
     except Exception as e:
-        print(f"[ERROR] reasoning_node LLM failed: {e}")
+        logger.error("reasoning_node LLM failed", error=str(e))
         return {
             "reply_text": "I apologize, but I'm experiencing technical difficulties. The system is operating in basic mode with limited responses. Please check your API key configuration for full AI functionality.",
             "tts_path": None

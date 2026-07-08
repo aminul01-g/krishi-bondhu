@@ -5,6 +5,10 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy import select, text, event
 from dotenv import load_dotenv
 
+from app.core.logging import get_logger
+
+logger = get_logger("db")
+
 load_dotenv()
 
 # ---------------------------------------------------------------------------
@@ -17,7 +21,7 @@ if not database_url:
     )
     os.makedirs(os.path.dirname(sqlite_path), exist_ok=True)
     database_url = f"sqlite+aiosqlite:///{sqlite_path}"
-    print(f"[INFO] Using persistent SQLite fallback database at {sqlite_path}")
+    logger.info("Using persistent SQLite fallback database", path=sqlite_path)
 
 DATABASE_URL = database_url
 
@@ -58,9 +62,9 @@ if "sqlite" in DATABASE_URL:
             dbapi_conn.load_extension("mod_spatialite")
         except Exception:
             if not _spatialite_warned:
-                print(
-                    "[INFO] SpatiaLite not available – geospatial features "
-                    "disabled.  Install libspatialite-dev if needed."
+                logger.info(
+                    "SpatiaLite not available – geospatial features disabled. "
+                    "Install libspatialite-dev if needed."
                 )
                 _spatialite_warned = True
 
@@ -97,7 +101,7 @@ async def get_db():
         try:
             await session.close()
         except Exception as e:
-            print(f"Error closing database session: {e}")
+            logger.warning("Error closing database session", error=str(e))
 
 
 async def get_db_session():

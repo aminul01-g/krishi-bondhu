@@ -4,7 +4,10 @@ import re
 from gtts import gTTS
 from uuid import uuid4
 from app.api.utils import UPLOAD_DIR
+from app.core.logging import get_logger
 import time
+
+logger = get_logger("tts")
 
 # Maximum characters sent to TTS to avoid excessively long audio files
 TTS_MAX_CHARS = 600
@@ -56,7 +59,7 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
     cleaned_text = clean_text_for_tts(text)
     
     if not cleaned_text or len(cleaned_text.strip()) < 1:
-        print("[WARNING] Text is empty after cleaning, using original")
+        logger.warning("Text is empty after cleaning, using original")
         cleaned_text = text.strip()
     
     # Use UPLOAD_DIR instead of /tmp for persistent storage
@@ -77,8 +80,8 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
             if os.path.exists(tts_path):
                 file_size = os.path.getsize(tts_path)
                 if file_size > 0:  # File has content
-                    print(f"[DEBUG] TTS generated: {len(cleaned_text)} characters (cleaned from {len(text)} original)")
-                    print(f"[DEBUG] TTS saved to: {tts_path} (file size: {file_size} bytes)")
+                    logger.debug("TTS generated", cleaned_chars=len(cleaned_text), original_chars=len(text))
+                    logger.debug("TTS saved", path=tts_path, file_size=file_size)
                     return tts_path
             retry_count += 1
             if retry_count < max_retries:
@@ -87,7 +90,7 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
         # If we get here, file wasn't created properly
         raise Exception(f"TTS file was not created at {tts_path} after {max_retries} retries")
     except Exception as e:
-        print(f"[ERROR] TTS generation failed: {e}")
+        logger.error("TTS generation failed", error=str(e))
         import traceback
         traceback.print_exc()
         # Try with original text as fallback
@@ -102,7 +105,7 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
                 if os.path.exists(tts_path):
                     file_size = os.path.getsize(tts_path)
                     if file_size > 0:  # File has content
-                        print(f"[DEBUG] TTS fallback saved to: {tts_path} (file size: {file_size} bytes)")
+                        logger.debug("TTS fallback saved", path=tts_path, file_size=file_size)
                         return tts_path
                 retry_count += 1
                 if retry_count < max_retries:
@@ -110,7 +113,7 @@ def synthesize_tts(text: str, lang: str="bn") -> str:
             
             raise Exception(f"TTS fallback file was not created at {tts_path} after {max_retries} retries")
         except Exception as e2:
-            print(f"[ERROR] TTS fallback also failed: {e2}")
+            logger.error("TTS fallback also failed", error=str(e2))
             import traceback
             traceback.print_exc()
             raise

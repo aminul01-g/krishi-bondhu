@@ -4,6 +4,9 @@ from sqlalchemy import select, delete
 from sqlalchemy.exc import OperationalError
 from app.db import get_db
 from app.models.db_models import Conversation
+from app.core.logging import get_logger
+
+logger = get_logger("routes")
 
 router = APIRouter()
 
@@ -34,8 +37,8 @@ async def get_conversations(db: AsyncSession = Depends(get_db)):
         ]
     except (OperationalError, ConnectionRefusedError, Exception) as e:
         # Database not available - return empty list instead of crashing
-        print(f"Database connection error (conversations endpoint): {e}")
-        print("Returning empty conversations list - database may not be running")
+        logger.error("Database connection error (conversations endpoint)", error=str(e))
+        logger.info("Returning empty conversations list - database may not be running")
         return []
 
 @router.delete("/conversations/{conversation_id}")
@@ -60,7 +63,7 @@ async def delete_conversation(conversation_id: int, db: AsyncSession = Depends(g
         )
         await db.commit()
         
-        print(f"Successfully deleted conversation {conversation_id}")
+        logger.info("Successfully deleted conversation", conversation_id=conversation_id)
         return {"message": "Conversation deleted successfully", "id": conversation_id}
         
     except HTTPException:
@@ -69,16 +72,16 @@ async def delete_conversation(conversation_id: int, db: AsyncSession = Depends(g
     except (OperationalError, ConnectionRefusedError) as e:
         try:
             await db.rollback()
-        except:
-            pass
-        print(f"Database connection error (delete conversation): {e}")
+        except Exception as rb_err:
+            logger.debug("Rollback failed after DB connection error", error=str(rb_err))
+        logger.error("Database connection error (delete conversation)", error=str(e))
         raise HTTPException(status_code=503, detail="Database not available")
     except Exception as e:
         try:
             await db.rollback()
-        except:
-            pass
-        print(f"Error deleting conversation: {e}")
+        except Exception as rb_err:
+            logger.debug("Rollback failed after delete error", error=str(rb_err))
+        logger.error("Error deleting conversation", error=str(e))
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error deleting conversation: {str(e)}")

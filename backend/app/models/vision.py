@@ -4,6 +4,9 @@ Vision analysis using Google Gemini API.
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
+from app.core.logging import get_logger
+
+logger = get_logger("vision")
 
 load_dotenv()
 
@@ -20,7 +23,7 @@ def run_vision_classifier(image_path: str) -> dict:
     if not os.path.exists(image_path):
         return {"error": "Image file not found"}
 
-    print(f"Analyzing image with Gemini Vision: {image_path}")
+    logger.info("Analyzing image with Gemini Vision", path=image_path)
     
     try:
         # Prepare the image
@@ -49,11 +52,11 @@ def run_vision_classifier(image_path: str) -> dict:
             
         try:
             result = json.loads(text)
-        except:
-             # Fallback if not valid JSON
+        except (json.JSONDecodeError, ValueError, TypeError):
+             # Fallback if the model reply is not valid JSON.
              result = {"description": response.text, "crop": "detected from text", "disease": "refer to description"}
              
-        print(f"Vision analysis result: {result}")
+        logger.info("Vision analysis result", result=result)
         return {
             "disease": result.get("disease", "unknown"),
             "crop": result.get("crop", "unknown"),
@@ -61,5 +64,5 @@ def run_vision_classifier(image_path: str) -> dict:
         }
 
     except Exception as e:
-        print(f"Vision analysis failed: {e}")
+        logger.error("Vision analysis failed", error=str(e))
         return {"error": str(e)}

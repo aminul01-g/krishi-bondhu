@@ -64,8 +64,8 @@ async def get_dashboard_summary(
                 cached = redis_client.get(cache_key)
                 if cached:
                     return json.loads(cached)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dashboard cache read failed; recomputing: %s", e)
         elif cache_key in _mem_cache:
             # Note: in-memory cache TTL not strictly enforced here for simplicity
             return _mem_cache[cache_key]
@@ -162,8 +162,8 @@ async def get_dashboard_summary(
         if redis_client:
             try:
                 redis_client.setex(cache_key, 900, json.dumps(response_data)) # 15 mins
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dashboard cache write failed: %s", e)
         else:
             _mem_cache[cache_key] = response_data
 

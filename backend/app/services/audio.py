@@ -9,6 +9,9 @@ import librosa
 import soundfile as sf
 from app.core.prompts import GEMINI_TRANSCRIPTION_PROMPT
 from app.llm.provider import init_stt_pipeline
+from app.core.logging import get_logger
+
+logger = get_logger("audio")
 
 load_dotenv()
 
@@ -82,10 +85,10 @@ def transcribe_with_gemini(audio_path: str) -> dict:
     """
     try:
         if not os.path.exists(audio_path):
-            print(f"Audio file not found: {audio_path}")
+            logger.error("Audio file not found", path=audio_path)
             return {"text": "", "language": "en"}
-        
-        print(f"Reading audio file for Gemini: {audio_path}")
+
+        logger.info("Reading audio file for Gemini", path=audio_path)
         import mimetypes
         with open(audio_path, 'rb') as f:
             audio_data = f.read()
@@ -99,8 +102,8 @@ def transcribe_with_gemini(audio_path: str) -> dict:
             else:
                 mime_type = 'audio/webm'
             
-        print(f"Using audio MIME type: {mime_type}")
-        print("Generating transcription with Gemini...")
+        logger.info("Using audio MIME type", mime_type=mime_type)
+        logger.info("Generating transcription with Gemini")
         
         try:
             from google.generativeai.types import Part
@@ -117,7 +120,7 @@ def transcribe_with_gemini(audio_path: str) -> dict:
             
         transcript_text = None
         if hasattr(response, 'text') and response.text:
-            print(f"[DEBUG] Raw Gemini STT Response text: {response.text}")
+            logger.debug("Raw Gemini STT Response text", text=response.text)
             transcript_text = response.text
         elif hasattr(response, 'candidates') and response.candidates and len(response.candidates) > 0:
             candidate = response.candidates[0]
@@ -135,18 +138,18 @@ def transcribe_with_gemini(audio_path: str) -> dict:
         language = detect_language_from_text(transcript_text)
         
         if transcript_text == "EMPTY_AUDIO":
-             print(f"Transcription returned EMPTY_AUDIO. Returning empty string.")
+             logger.info("Transcription returned EMPTY_AUDIO. Returning empty string")
              return {"text": "", "language": "en", "unclear": True}
-        
+
         unclear = is_unclear_transcript(transcript_text)
         if unclear:
-            print(f"Transcription looks unclear: {transcript_text}")
+            logger.info("Transcription looks unclear", transcript=transcript_text)
         else:
-            print(f"Transcription successful. Language: {language}, Text length: {len(transcript_text)}")
+            logger.info("Transcription successful", language=language, text_length=len(transcript_text))
         return {"text": transcript_text, "language": language, "unclear": unclear}
-        
+
     except Exception as e:
-        print(f"[ERROR] Audio transcription failed: {e}")
+        logger.error("Audio transcription failed", error=str(e))
         import traceback
         traceback.print_exc()
         return {"text": "", "language": "en", "unclear": True}
@@ -160,7 +163,7 @@ def transcribe_with_google_speech(audio_path: str) -> dict:
     if not os.path.exists(audio_path):
         raise Exception(f"Audio file not found: {audio_path}")
 
-    print(f"Transcribing with Google Speech-to-Text: {audio_path}")
+    logger.info("Transcribing with Google Speech-to-Text", path=audio_path)
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = GOOGLE_SPEECH_CREDENTIALS_JSON
     client = speech.SpeechClient()
 
@@ -208,7 +211,7 @@ def transcribe_with_local_whisper(audio_path: str) -> dict:
     if not os.path.exists(audio_path):
         raise Exception(f"Audio file not found: {audio_path}")
 
-    print(f"Transcribing with Local Hugging Face Whisper model...")
+    logger.info("Transcribing with Local Hugging Face Whisper model")
     try:
         # Load local pipeline
         stt_pipeline = init_stt_pipeline()
@@ -242,7 +245,7 @@ def transcribe_with_groq_whisper(audio_path: str) -> dict:
     if not api_key:
         raise Exception("GROQ_API_KEY not found.")
 
-    print(f"Transcribing with Groq Whisper API...")
+    logger.info("Transcribing with Groq Whisper API")
     try:
         from groq import Groq
         client = Groq(api_key=api_key)
@@ -277,7 +280,7 @@ def transcribe_audio(audio_path: str) -> dict:
             return result
         except Exception as groq_error:
             groq_failure = str(groq_error)
-            print(f"[WARN] Groq Whisper fallback: {groq_failure}")
+            logger.warning("Groq Whisper fallback", error=groq_failure)
 
     hf_failure = None
     google_failure = None
@@ -289,7 +292,7 @@ def transcribe_audio(audio_path: str) -> dict:
         return result
     except Exception as hf_error:
         hf_failure = str(hf_error)
-        print(f"[WARN] Hugging Face Whisper fallback: {hf_failure}")
+        logger.warning("Hugging Face Whisper fallback", error=hf_failure)
 
     try:
         result = transcribe_with_google_speech(audio_path)
@@ -298,7 +301,7 @@ def transcribe_audio(audio_path: str) -> dict:
         return result
     except Exception as google_error:
         google_failure = str(google_error)
-        print(f"[WARN] Google Speech-to-Text fallback: {google_failure}")
+        logger.warning("Google Speech-to-Text fallback", error=google_failure)
 
     result = transcribe_with_gemini(audio_path)
     result["stt_source"] = "Gemini"
@@ -310,7 +313,7 @@ def transcribe_audio(audio_path: str) -> dict:
 
 
 def stt_node(state):
-    print(f"[DEBUG] STT node: Starting")
+    logger.debug("STT node: Starting")
     
     # If transcript already exists (from text input), detect language from it
     if state.get("transcript"):
