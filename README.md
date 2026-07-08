@@ -137,7 +137,7 @@ KrishiBondhu is dockerized for easy deployment. Ensure Docker and Docker Compose
 docker compose up --build
 ```
 
-- **Frontend App:** http://localhost:5173
+- **Frontend App:** http://localhost:8080
 - **Backend API:** http://localhost:8000
 - **Swagger Docs:** http://localhost:8000/docs
 

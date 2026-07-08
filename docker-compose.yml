@@ -28,11 +28,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: krishibondhu_frontend
+    # Production build: nginx serves the static bundle on :80 and proxies
+    # /api (+ WebSocket) to the backend. No source volume mount — that would
+    # shadow the built image with the host tree and break the served assets.
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
+      - "8080:80"
     restart: unless-stopped
     depends_on:
       - backend
@@ -73,4 +73,3 @@ volumes:
   postgres_data:
   redis_data:
   backend_uploads:
-  frontend_node_modules:
