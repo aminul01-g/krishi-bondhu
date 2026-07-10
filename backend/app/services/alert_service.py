@@ -3,13 +3,34 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select
+from sqlalchemy import select, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import AsyncSessionLocal
-from app.models.db_models import User
+from app.models.db_models import Base, User
 from app.services.weather_service import WeatherService
+from app.services.agronomy_service import AgronomyService
 
 logger = logging.getLogger("AlertService")
+
+
+class Alert(Base):
+    """Persisted proactive pest/disease risk alert (one row per user per run).
+
+    Defined here (not in db_models.py) to keep this module self-contained and
+    so importing ``app.services.alert_service`` at startup registers the
+    ``alerts`` table on ``Base.metadata`` for ``create_all``.
+    """
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    crop = Column(String, nullable=False)
+    risk_level = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Alert user={self.user_id} crop={self.crop} level={self.risk_level}>"
 
 class AlertService:
     """
@@ -21,59 +42,65 @@ class AlertService:
 
     async def calculate_pest_risk(self, crop: str, lat: float, lon: float) -> Dict[str, Any]:
         """
-        Calculates risk using a data-driven approach based on current weather.
-        Production: Uses thresholds from agricultural literature (e.g., BPH, Late Blight).
+        Calculates pest/disease risk using AgronomyService's probability-based
+        risk model (disease / drought / pest), guarded so it never throws on
+        missing or partial weather payloads.
         """
         weather = await self.weather_service.get_weather_data(lat, lon)
-        temp = weather['temp_mean']
-        humidity = weather['humidity']
-        rainfall = weather['rainfall_mm']
+        if not isinstance(weather, dict):
+            weather = {}
 
-        crop = crop.lower().strip()
-        risk_level = "Low"
-        alerts = []
+        # Guard every weather key with a safe default so a partial payload
+        # (missing 'temp_mean' / 'humidity' / 'rainfall_mm') can never crash.
+        temp = weather.get("temp_mean")
+        humidity = weather.get("humidity")
+        rainfall = weather.get("rainfall_mm", 0.0) or 0.0
+        if temp is None:
+            temp = 30.0
+        if humidity is None:
+            humidity = 80.0
 
-        # Scientific thresholds for common Bangladeshi pests
-        # 1. Rice: Brown Plant Hopper (BPH) - High humidity, moderate temp
-        if "rice" in crop or "paddy" in crop:
-            if temp >= 25 and humidity >= 80:
-                risk_level = "High"
-                alerts.append("Brown Plant Hopper (BPH): High risk. High humidity and moderate temps favor hopper multiplication.")
-            elif temp >= 25 and humidity >= 70:
-                risk_level = "Medium"
-                alerts.append("BPH: Conditions are favorable. Monitor the base of the plants.")
+        conditions = {
+            "temp": float(temp),
+            "humidity": float(humidity),
+            "rainfall_mm": float(rainfall),
+            "leaf_wetness_hours": 4.0,
+        }
+        # Delegate to the shared, probability-based risk engine.
+        risks = AgronomyService.evaluate_risk(conditions)
 
-        # 2. Potato: Late Blight (Phytophthora infestans) - Cool, wet, humid
-        elif "potato" in crop:
-            if 10 <= temp <= 24 and humidity >= 85:
-                risk_level = "High"
-                alerts.append("Late Blight (নাবি ধসা): CRITICAL RISK. Cool, wet conditions are ideal for spore spread.")
-            elif 15 <= temp <= 25 and humidity >= 75:
-                risk_level = "Medium"
-                alerts.append("Late Blight: Moderate risk. Ensure proper drainage and aeration.")
+        _LEVEL_RANK = {"High": 3, "Moderate": 2, "Medium": 2, "Low": 1}
+        alerts: List[str] = []
+        highest = 1
+        for r in risks:
+            lvl = r.get("level", "Low")
+            highest = max(highest, _LEVEL_RANK.get(lvl, 1))
+            rec = r.get("recommendation")
+            if rec:
+                alerts.append(rec)
 
-        # 3. Brinjal: Fruit and Shoot Borer - Warm and humid
-        elif "brinjal" in crop:
-            if temp > 25 and humidity > 60:
-                risk_level = "High"
-                alerts.append("Fruit and Shoot Borer: High risk. Warm weather accelerates larval growth.")
-
-        # General Rainfall Alert
-        if rainfall > 50:
-            alerts.append("Heavy Rainfall: Risk of soil erosion and fungal root rot. Avoid nitrogen application today.")
+        # General rainfall alert (independent of the probabilistic factors).
+        if float(rainfall) > 50:
+            alerts.append(
+                "Heavy Rainfall: Risk of soil erosion and fungal root rot. "
+                "Avoid nitrogen application today."
+            )
 
         if not alerts:
             alerts.append("No specific pest risks detected for current weather and crop.")
 
+        risk_level = {3: "High", 2: "Medium", 1: "Low"}[highest]
+
         return {
-            "crop": crop,
+            "crop": crop.lower().strip(),
             "risk_level": risk_level,
             "alerts": alerts,
             "weather_context": {
                 "temp": temp,
                 "humidity": humidity,
-                "rainfall": rainfall
-            }
+                "rainfall": rainfall,
+            },
+            "risk_factors": risks,
         }
 
     async def run_daily_risk_analysis(self):
@@ -105,7 +132,7 @@ class AlertService:
                         crop=crop,
                         risk_level=risk_data["risk_level"],
                         message="; ".join(risk_data["alerts"]),
-                        timestamp=datetime.now()
+                        timestamp=datetime.utcnow()
                     )
                     db.add(new_alert)
 

@@ -74,7 +74,7 @@ class TestMarketServiceTrendFallback:
             result = await svc.predict_price_trend("rice", db_session)
 
             assert result["confidence"] == "Low (Heuristic Fallback)"
-            assert result["trend"] == "Stable (Baseline)"
+            assert result["trend"] == "Stable"
 
 
 class TestMarketServiceCache:

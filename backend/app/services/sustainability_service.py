@@ -53,7 +53,22 @@ SEQUESTRATION_FACTORS = {
     "organic_compost": {"value": 80.0, "uncertainty": 25.0},
     "agroforestry": {"value": 300.0, "uncertainty": 80.0},
     "reduced-nitrogen": {"value": 60.0, "uncertainty": 20.0},
+    # Water-efficiency practices (e.g. drip irrigation) are NOT nitrogen
+    # reduction — they save irrigation water. Small, documented offset.
+    "water_efficiency": {"value": 40.0, "uncertainty": 15.0},
 }
+
+# Monetary units. Cost-only diary entries (e.g. 300 BDT "Urea") must NEVER be
+# treated as a physical mass/volume — emissions can never be derived from a
+# monetary amount. (See #20.)
+MONETARY_UNITS = {
+    "bdt", "tk", "taka", "rs", "inr", "usd", "$", "rupee", "rupiah", "৳",
+    "₹", "টাকা", "রুপি",
+}
+
+
+def _is_monetary_unit(unit: Optional[str]) -> bool:
+    return bool(unit) and unit.lower() in MONETARY_UNITS
 
 PRACTICE_KEYWORDS = {
     "no-till": ["no till", "zero tillage", "ন চাষ", "চাষ ছাড়া"],
@@ -61,6 +76,28 @@ PRACTICE_KEYWORDS = {
     "organic_compost": ["compost", "vermicompost", "organic manure", "কম্পোস্ট", "জৈব সার"],
     "agroforestry": ["tree planting", "boundary trees", "fruit trees", "বাগান", "গাছ"],
     "reduced-nitrogen": ["reduced nitrogen", "less urea", "কম ইউরিয়া", "সুষম সার"],
+    "water_efficiency": ["drip", "drip irrigation", "সেচ ফোয়ারা", "ফোয়ারা সেচ"],
+}
+
+# Structured diary `category` / `entry_type` values that map directly to a
+# verified practice. When present, this gives high-confidence (0.9) detection
+# and we only fall back to fuzzy keyword matching otherwise. (See #23.)
+CATEGORY_TO_PRACTICE = {
+    "compost": "organic_compost",
+    "organic_manure": "organic_compost",
+    "vermicompost": "organic_compost",
+    "cover_crop": "cover-cropping",
+    "green_manure": "cover-cropping",
+    "no_till": "no-till",
+    "zero_till": "no-till",
+    "agroforestry": "agroforestry",
+    "tree_planting": "agroforestry",
+    "reduced_nitrogen": "reduced-nitrogen",
+    "less_urea": "reduced-nitrogen",
+    "balanced_fertilizer": "reduced-nitrogen",
+    "drip": "water_efficiency",
+    "drip_irrigation": "water_efficiency",
+    "water_efficiency": "water_efficiency",
 }
 
 # Reference annual emissions (kg CO2-eq) used to normalize the penalty.
@@ -94,23 +131,30 @@ def parse_input_events(entries: List[Any]) -> List[Dict[str, Any]]:
         unit = (getattr(e, "unit", None) or "").lower()
         # Mass/volume units let us compute real emissions; cost-only entries can't.
         known_qty = unit in ("kg", "mon", "l", "liter", "লিটার", "kwh")
-        confidence = 0.9 if known_qty else 0.4
+        is_cost = _is_monetary_unit(unit)
 
         ef_key = None
         canonical_qty = amount
         canonical_unit = unit
-        if itype in ("urea", "dap", "potash"):
-            ef_key = "synthetic_nitrogen"
-            n_content = N_CONTENT.get(itype, 0.0)
-            # Emissions are counted on elemental N, not on fertilizer mass.
-            canonical_qty = amount * n_content
-            canonical_unit = "kg N"
-        elif itype == "diesel":
-            ef_key = "diesel_fuel"
-            canonical_unit = "L"
-        elif itype == "electricity":
-            ef_key = "electricity"
-            canonical_unit = "kWh"
+        confidence = 0.9 if known_qty else 0.4
+        # A monetary entry (e.g. 300 BDT "Urea") is a cost, NOT a physical mass.
+        # Never derive emissions from a monetary amount — skip the N/EF factors.
+        if not is_cost:
+            if itype in ("urea", "dap", "potash"):
+                ef_key = "synthetic_nitrogen"
+                n_content = N_CONTENT.get(itype, 0.0)
+                # Emissions are counted on elemental N, not on fertilizer mass.
+                canonical_qty = amount * n_content
+                canonical_unit = "kg N"
+            elif itype == "diesel":
+                ef_key = "diesel_fuel"
+                canonical_unit = "L"
+            elif itype == "electricity":
+                ef_key = "electricity"
+                canonical_unit = "kWh"
+        else:
+            # Cost-only: low confidence, no emission factor is applicable.
+            confidence = 0.3
 
         emission_kg = (
             round(canonical_qty * EMISSION_FACTORS[ef_key], 4)
@@ -121,6 +165,7 @@ def parse_input_events(entries: List[Any]) -> List[Dict[str, Any]]:
             "emission_factor_key": ef_key,
             "quantity": amount,
             "unit": unit,
+            "is_cost": is_cost,
             "canonical_quantity": round(canonical_qty, 3),
             "canonical_unit": canonical_unit,
             "emission_kg": emission_kg,
@@ -172,23 +217,50 @@ async def calculate_carbon_footprint(db: AsyncSession, user_id: str) -> Dict[str
 # Practices
 # ---------------------------------------------------------------------------
 async def verify_sustainable_practices(db: AsyncSession, user_id: str) -> List[Dict[str, Any]]:
-    """Rule-based engine that detects sustainable practices with confidence."""
+    """Rule-based engine that detects sustainable practices with confidence.
+
+    Detection prefers structured diary ``category``/``entry_type`` (high,
+    category-certain confidence) and only falls back to fuzzy keyword matching
+    on free-text notes (capped confidence reflecting the weaker signal). (#23)
+    """
     stmt = select(FarmDiary).where(FarmDiary.user_id == user_id)
     result = await db.execute(stmt)
     entries = result.scalars().all()
     all_notes = " ".join([(e.notes or "") for e in entries if e.notes]).lower()
 
-    verified: List[Dict[str, Any]] = []
-    for practice, keywords in PRACTICE_KEYWORDS.items():
-        hits = [kw for kw in keywords if kw in all_notes]
-        if hits:
-            # More distinct cues -> higher confidence the practice is real.
-            confidence = min(1.0, 0.5 + 0.25 * len(hits))
-            verified.append({
-                "practice": practice,
-                "confidence": round(confidence, 2),
-                "evidence": hits,
-            })
+    # practice -> (confidence, evidence)
+    found: Dict[str, Any] = {}
+
+    def _record(practice: str, confidence: float, evidence: List[str]) -> None:
+        cur = found.get(practice, {"confidence": 0.0, "evidence": []})
+        cur["confidence"] = max(cur["confidence"], confidence)
+        for ev in evidence:
+            if ev not in cur["evidence"]:
+                cur["evidence"].append(ev)
+        found[practice] = cur
+
+    for e in entries:
+        cat = (getattr(e, "category", None) or "").lower().strip()
+        notes = (getattr(e, "notes", None) or "").lower()
+
+        # 1) Structured category match — strongest, category-certain signal.
+        structured = CATEGORY_TO_PRACTICE.get(cat)
+        if structured:
+            _record(structured, 0.9, [f"category:{cat}"])
+
+        # 2) Keyword fallback on free-text notes (capped below category certainty).
+        for practice, keywords in PRACTICE_KEYWORDS.items():
+            hits = [kw for kw in keywords if kw in notes]
+            if hits:
+                # More distinct cues -> higher confidence, but capped at 0.8 so a
+                # structured category always outranks fuzzy text.
+                conf = min(0.8, 0.5 + 0.25 * len(hits))
+                _record(practice, conf, hits)
+
+    verified = [
+        {"practice": p, "confidence": round(v["confidence"], 2), "evidence": v["evidence"]}
+        for p, v in found.items()
+    ]
     return verified
 
 
@@ -225,7 +297,11 @@ async def get_sustainability_scorecard(db: AsyncSession, user_id: str) -> Dict[s
             practice_bonus += spec["value"] * 0.05
     practice_bonus = min(40.0, practice_bonus)
     emission_penalty = min(30.0, total_emissions / REFERENCE_EMISSIONS * 30.0)
-    base_score = 50.0
+    # Calibration: the score is anchored at 0 (not 50). A farmer with no diary
+    # data / no verified practices / no emissions scores ~0 ("C" band), so the
+    # number honestly reflects lack of evidence rather than implying a middling
+    # baseline. The floor therefore derives from verified practices + penalties.
+    base_score = 0.0
     final_score = max(0.0, min(100.0, base_score + practice_bonus - emission_penalty))
     net_kg = round(total_offset - total_emissions, 2)
 
@@ -272,19 +348,48 @@ async def get_sustainability_scorecard(db: AsyncSession, user_id: str) -> Dict[s
 # ---------------------------------------------------------------------------
 # Carbon markets
 # ---------------------------------------------------------------------------
+# Catalog of carbon-credit schemes. `regions` is None => nationwide; otherwise a
+# list of region/district substrings that must match `location`. (#22)
+_CARBON_MARKETS = [
+    {"name": "Bangladesh Green Fund", "type": "Government", "benefit": "Cash subsidy per bigha",
+     "min_score": 60, "regions": None, "requires_practice": False},
+    {"name": "Global Carbon Credit Exchange", "type": "International", "benefit": "Carbon credits in USD",
+     "min_score": 80, "regions": None, "requires_practice": True},
+    {"name": "Eco-Agro Partnership", "type": "Private", "benefit": "Reduced interest on loans",
+     "min_score": 40, "regions": None, "requires_practice": False},
+]
+# Region/district-specific schemes, appended only when `location` matches.
+_REGION_CARBON_MARKETS: List[Dict[str, Any]] = []
+
+
 def get_carbon_market_opportunities(score: float, location: str) -> List[Dict[str, Any]]:
-    """Matches the farmer's score to potential carbon-credit schemes with rationale."""
-    opportunities = [
-        {"name": "Bangladesh Green Fund", "min_score": 60, "benefit": "Cash subsidy per bigha",
-         "type": "Government", "requires_practice": False},
-        {"name": "Global Carbon Credit Exchange", "min_score": 80, "benefit": "Carbon credits in USD",
-         "type": "International", "requires_practice": True},
-        {"name": "Eco-Agro Partnership", "min_score": 40, "benefit": "Reduced interest on loans",
-         "type": "Private", "requires_practice": False},
-    ]
+    """Matches the farmer's score to potential carbon-credit schemes with rationale.
+
+    Eligibility is score-based AND region-aware: a scheme only applies when its
+    ``regions`` is None (nationwide) or matches the provided ``location``
+    (region/district substring). Region-specific schemes are appended when they
+    apply; results are ranked (eligible first, then by lowest qualifying
+    threshold). A safe nationwide fallback (the three base schemes) is always
+    returned even when ``location`` is empty/unknown. (#22)
+    """
+    loc = (location or "").lower().strip()
+
+    def _applies(regions: Optional[List[str]]) -> bool:
+        if not regions:
+            return True
+        if not loc:
+            return False
+        return any(r.lower() in loc or loc in r.lower() for r in regions)
+
+    catalog = list(_CARBON_MARKETS)
+    for m in _REGION_CARBON_MARKETS:
+        if _applies(m.get("regions")):
+            catalog.append(m)
+
     out = []
-    for opt in opportunities:
-        eligible = score >= opt["min_score"]
+    for opt in catalog:
+        region_match = _applies(opt.get("regions"))
+        eligible = score >= opt["min_score"] and region_match
         rationale = (
             f"Score {score:.0f} meets minimum {opt['min_score']}."
             if eligible else
@@ -293,7 +398,11 @@ def get_carbon_market_opportunities(score: float, location: str) -> List[Dict[st
         out.append({
             "name": opt["name"], "type": opt["type"], "benefit": opt["benefit"],
             "eligible": eligible, "rationale": rationale,
+            "region_match": region_match,
         })
+
+    # Rank: eligible schemes first, then by lowest qualifying threshold.
+    out.sort(key=lambda o: (not o["eligible"], o["name"]))
     return out
 
 
@@ -312,7 +421,8 @@ _PRACTICE_ALIASES = {
     "composting": "organic_compost",
     "cover_cropping": "cover-cropping",
     "cover cropping": "cover-cropping",
-    "drip_irrigation": "reduced-nitrogen",
+    # Drip irrigation is a WATER-efficiency practice, NOT reduced nitrogen use.
+    "drip_irrigation": "water_efficiency",
     "no_till": "no-till",
     "no-till": "no-till",
     "agroforestry": "agroforestry",
@@ -374,27 +484,47 @@ class SustainabilityService:
         }
 
     def detect_sustainable_practices(self, entries: List[Any]) -> List[Dict[str, Any]]:
-        """Detect sustainable practices from a list of diary entries (by notes)."""
-        notes_parts: List[str] = []
+        """Detect sustainable practices from a list of diary entries.
+
+        Prefers structured ``category``/``description`` signals (high confidence)
+        and falls back to fuzzy keyword matching on notes (capped confidence). (#23)
+        """
+        found: Dict[str, Any] = {}
+
+        def _record(practice: str, confidence: float, evidence: List[str]) -> None:
+            cur = found.get(practice, {"confidence": 0.0, "evidence": []})
+            cur["confidence"] = max(cur["confidence"], confidence)
+            for ev in evidence:
+                if ev not in cur["evidence"]:
+                    cur["evidence"].append(ev)
+            found[practice] = cur
+
         for e in (entries or []):
+            cat = getattr(e, "category", None)
+            if not isinstance(cat, str):
+                cat = ""
+            cat = cat.lower().strip()
             notes = getattr(e, "notes", None)
             if not isinstance(notes, str):
                 notes = getattr(e, "description", None)
             if not isinstance(notes, str):
                 notes = ""
-            notes_parts.append(notes)
-        all_notes = " ".join(notes_parts).lower()
+            notes = notes.lower()
 
-        detected: List[Dict[str, Any]] = []
-        for practice, keywords in PRACTICE_KEYWORDS.items():
-            hits = [kw for kw in keywords if kw in all_notes]
-            if hits:
-                confidence = min(1.0, 0.5 + 0.25 * len(hits))
-                detected.append({
-                    "practice": practice,
-                    "confidence": round(confidence, 2),
-                    "evidence": hits,
-                })
+            structured = CATEGORY_TO_PRACTICE.get(cat)
+            if structured:
+                _record(structured, 0.9, [f"category:{cat}"])
+
+            for practice, keywords in PRACTICE_KEYWORDS.items():
+                hits = [kw for kw in keywords if kw in notes]
+                if hits:
+                    conf = min(0.8, 0.5 + 0.25 * len(hits))
+                    _record(practice, conf, hits)
+
+        detected = [
+            {"practice": p, "confidence": round(v["confidence"], 2), "evidence": v["evidence"]}
+            for p, v in found.items()
+        ]
         return detected
 
     def generate_scorecard(
@@ -432,7 +562,9 @@ class SustainabilityService:
         practice_bonus = min(40.0, practice_bonus)
 
         emission_penalty = min(30.0, total_emissions / REFERENCE_EMISSIONS * 30.0)
-        base_score = 50.0
+        # Calibration: anchored at 0 (see get_sustainability_scorecard) so a
+        # no-data farmer scores ~0, not a misleading 50/"C".
+        base_score = 0.0
         final_score = max(
             0.0, min(100.0, base_score + practice_bonus - emission_penalty)
         )

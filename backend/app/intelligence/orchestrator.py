@@ -127,7 +127,7 @@ class IntelligenceOrchestrator:
     def _synthesize(prompt: str, language: str) -> str:
         try:
             from app.core.prompts import REASONING_CHAT_INSTRUCTION
-            from app.llm import call_llm
+            from app.services.llm import call_llm
 
             sys_inst = REASONING_CHAT_INSTRUCTION + (
                 "\n\nRespond in Bengali (Bangla) unless the user writes in English."

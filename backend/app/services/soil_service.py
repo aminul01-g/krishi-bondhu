@@ -22,8 +22,7 @@ class SoilService:
         if not image_path or not os.path.exists(image_path):
             return "No valid soil image provided for analysis."
 
-        # 1. Primary: HuggingFace ViT (prof-freakenstein/plantnet-disease-detection or similar)
-        # In a real production environment, we call the Inference API
+        # 1. Primary: HuggingFace ViT soil-classification model (real Inference API call)
         result = await self._call_hf_vit_model(image_path)
         if result:
             return f"Primary Model Analysis:\n{result}"
@@ -33,21 +32,49 @@ class SoilService:
         if result:
             return f"Secondary Model (Groq) Analysis:\n{result}"
 
-        # 3. Tertiary: Rule-based Fallback
-        return "Fallback Analysis: The soil appears to be Loamy with a dark brown color, indicating good organic matter content."
+        # 3. Tertiary: honest failure — we never present a fabricated diagnosis.
+        # Instead guide the farmer to the deterministic, rule-based paths.
+        return (
+            "Image-based soil diagnosis is currently unavailable "
+            "(no vision model is configured or reachable). "
+            "For a real assessment, use the NPK soil test or the DIY soil test "
+            "(ribbon / pH / jar) — both give a deterministic, rule-based analysis."
+        )
 
     async def _call_hf_vit_model(self, image_path: str) -> Optional[str]:
-        """Simulates/implements a call to a fine-tuned ViT model on HuggingFace."""
+        """Call a HuggingFace Inference API model for soil classification.
+
+        Returns the model's prediction string, or None if no key is configured
+        or the call fails. We intentionally do NOT fabricate a result — when we
+        cannot obtain a genuine prediction we fall through to the next tier.
+        """
         if not self.hf_api_key:
             return None
 
+        model_id = os.getenv("SOIL_VISION_MODEL_ID", "google/vit-base-patch16-224")
+        api_url = f"https://api-inference.huggingface.co/models/{model_id}"
         try:
-            # This is where the actual request to HF Inference API would go
-            # For the prototype, we simulate a successful response from a specialized model
-            return "Detected soil texture: Silty Clay Loam. Organic matter: Medium. Estimated pH: 6.2 (Slightly Acidic)."
+            import httpx
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+            resp = httpx.post(
+                api_url,
+                content=image_bytes,
+                headers={"Authorization": f"Bearer {self.hf_api_key}"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                preds = resp.json()
+                if isinstance(preds, list) and preds:
+                    out = f"[HF {model_id}] Top predictions:\n"
+                    for p in preds[:5]:
+                        out += f"  - {p.get('label', '?')} — {p.get('score', 0) * 100:.1f}%\n"
+                    logger.info("[SoilService] HF ViT succeeded.")
+                    return out.strip()
+            logger.warning(f"[SoilService] HF ViT returned {resp.status_code}.")
         except Exception as e:
-            logger.error(f"HF ViT call failed: {e}")
-            return None
+            logger.error(f"HF ViT (soil) call failed: {e}")
+        return None
 
     async def _call_groq_vision(self, image_path: str) -> Optional[str]:
         """Calls Groq Llama Vision as secondary fallback."""

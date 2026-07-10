@@ -17,11 +17,11 @@ class TestMarketEndpoints:
     """Test market API endpoints."""
 
     def test_market_prices_endpoint(self, test_client):
-        response = test_client.get("/api/market/prices?crop=rice")
+        response = test_client.get("/api/market/history?crop=rice")
         assert response.status_code in [200, 422, 500]
 
     def test_market_trend_endpoint(self, test_client):
-        response = test_client.get("/api/market/trend?crop=potato")
+        response = test_client.get("/api/market/advice?crop=potato")
         assert response.status_code in [200, 422, 500]
 
 
@@ -40,7 +40,7 @@ class TestDiaryEndpoints:
             "amount": 1000.0,
             "description": "Seeds purchase"
         }
-        response = test_client.post("/api/diary/entries", json=payload)
+        response = test_client.post("/api/diary/add", json=payload)
         assert response.status_code in [200, 201, 422]
 
 
@@ -48,7 +48,7 @@ class TestAlertEndpoints:
     """Test alert/tips API endpoints."""
 
     def test_alerts_tips_endpoint(self, test_client):
-        response = test_client.get("/api/alerts/tips?crop=rice&lat=23.81&lon=90.41")
+        response = test_client.get("/api/alerts/daily?crop=rice&lat=23.81&lon=90.41")
         assert response.status_code in [200, 422, 500]
 
 

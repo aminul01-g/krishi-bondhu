@@ -50,29 +50,6 @@ class ModelRegistry:
 
         # Cache for loaded models to avoid OOM
         self._loaded_models = {}
-        
-        # Model IDs mapped to environment variables with hardcoded defaults
-        self.MODELS = {
-            "agronomist": {
-                "primary": os.getenv("PRIMARY_LLM_ID", "AI71ai/Llama-agrillm-3.3-70B"),
-                "fallback": os.getenv("FALLBACK_LLM_ID", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-            },
-            "disease_vision": {
-                "primary": os.getenv("VISION_MODEL_ID", "prof-freakenstein/plantnet-disease-detection"),
-                "fallback": "wambugu71/crop_leaf_diseases_vit"
-            },
-            "multimodal_interpreter": {
-                "primary": os.getenv("INTERPRETER_LLM_ID", "md-nishat-008/TigerLLM-1B-it"),
-                "fallback": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-            },
-            "voice_stt": {
-                "primary": os.getenv("STT_MODEL_ID", "mozilla-ai/whisper-large-v3-bn"),
-                "fallback": "shhossain/whisper-tiny-bn"
-            }
-        }
-        
-        # Cache for loaded models to avoid OOM
-        self._loaded_models = {}
 
     def get_agronomist_llm(self):
         """Loads the Agronomist LLM wrapped as a LangChain LLM for CrewAI."""

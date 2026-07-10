@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardSummary } from '../services/api';
-import { getMe } from '../services/api';
+import { getDashboardSummary, getFarmerProfile } from '../services/api';
 import { LoadingSpinner } from '../components/shared/LoadingStates';
 
 // Fallback to Dhaka if GPS fails
@@ -21,27 +20,15 @@ export default function DashboardPage() {
     async function loadDashboard() {
       try {
         setLoading(true);
-        // 1. Get user's crops from profile
-        // Alternatively, getMe could include crops if we updated it, but let's just fetch profile or fallback to defaults
-        const userRes = await getMe(ctrl.signal).catch(() => ({}));
-        // Since we didn't inspect getMe thoroughly, let's just use defaults or try getting profile
-        let crops = 'ধান,পাট,আলু'; 
-        
-        // Try getting profile using raw fetch if getFarmerProfile is not in api.js yet
+        // 1. Get user's crops from profile (via the shared api.js service)
+        let crops = 'ধান,পাট,আলু';
         try {
-          const token = localStorage.getItem('kb_auth_token');
-          const profileRes = await fetch(import.meta.env.VITE_API_BASE + '/api/profile', {
-            headers: { 'Authorization': `Bearer ${token}` },
-            signal: ctrl.signal
-          });
-          if (profileRes.ok) {
-            const profileData = await profileRes.json();
-            if (profileData && profileData.crops && profileData.crops.length > 0) {
-              crops = profileData.crops.join(',');
-            }
+          const profileData = await getFarmerProfile(ctrl.signal);
+          if (profileData && profileData.crops && profileData.crops.length > 0) {
+            crops = profileData.crops.join(',');
           }
-        } catch(err) {
-          // Ignore profile error
+        } catch (err) {
+          // Ignore profile error — fall back to default crops.
         }
 
         // 2. Get location

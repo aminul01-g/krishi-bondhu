@@ -16,7 +16,7 @@ class TestDiaryEntryCreation:
             "description": "Fertilizer purchase",
             "category": "fertilizer"
         }
-        response = test_client.post("/api/diary/entries", json=payload)
+        response = test_client.post("/api/diary/add", json=payload)
         # Accept both 200 and 422 (if schema differs)
         assert response.status_code in [200, 201, 422]
 

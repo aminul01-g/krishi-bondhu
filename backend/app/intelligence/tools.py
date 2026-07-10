@@ -41,7 +41,7 @@ def _summarize(obj, max_len: int = 320) -> str:
 
 
 async def weather_tool(db, ctx: FarmerContext, message: str,
-                       gps: Optional[dict]) -> ToolTrace:
+                       gps: Optional[dict], external_id: str = "") -> ToolTrace:
     if not gps or gps.get("lat") is None:
         return ToolTrace(tool="weather", called=False, error="no_gps")
     try:
@@ -63,7 +63,7 @@ async def weather_tool(db, ctx: FarmerContext, message: str,
 
 
 async def water_balance_tool(db, ctx: FarmerContext, message: str,
-                             gps: Optional[dict]) -> ToolTrace:
+                             gps: Optional[dict], external_id: str = "") -> ToolTrace:
     if not gps or gps.get("lat") is None:
         return ToolTrace(tool="water_balance", called=False, error="no_gps")
     crop = detect_crop(message) or (ctx.crops[0] if ctx.crops else "rice")
@@ -87,7 +87,7 @@ async def water_balance_tool(db, ctx: FarmerContext, message: str,
 
 
 async def market_tool(db, ctx: FarmerContext, message: str,
-                      gps: Optional[dict]) -> ToolTrace:
+                      gps: Optional[dict], external_id: str = "") -> ToolTrace:
     crop = detect_crop(message) or (ctx.crops[0] if ctx.crops else "rice")
     try:
         from app.services.market_service import MarketService
@@ -137,7 +137,7 @@ async def yield_tool(db, ctx: FarmerContext, message: str,
 
 
 async def diary_search_tool(db, ctx: FarmerContext, message: str,
-                            gps: Optional[dict]) -> ToolTrace:
+                            gps: Optional[dict], external_id: str = "") -> ToolTrace:
     try:
         if not ctx.recent_diary:
             return ToolTrace(tool="diary", called=False, error="no_entries")

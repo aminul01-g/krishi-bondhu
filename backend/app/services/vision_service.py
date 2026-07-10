@@ -55,7 +55,12 @@ class VisionService:
         if result:
             return result
         logger.warning(f"[VisionService] All tiers failed for task='{task}'. Offline fallback.")
-        return OFFLINE_RESPONSES.get(task, OFFLINE_RESPONSES["disease"])
+        # Honestly label this as degraded/offline output — never present it as a
+        # confirmed diagnosis (the strings in OFFLINE_RESPONSES are static fallbacks).
+        return (
+            "⚠️ Offline/degraded mode — not a confirmed diagnosis: "
+            + OFFLINE_RESPONSES.get(task, OFFLINE_RESPONSES["disease"])
+        )
 
     def assess_damage(self, image_path: str, crop_type: str = "general") -> str:
         if not image_path or not os.path.exists(image_path):

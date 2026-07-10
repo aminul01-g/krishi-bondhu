@@ -239,3 +239,7 @@ backend/static/assets/
 backend/static/sw.js
 backend/static/workbox-*.js
 backend/static/registerSW.js
+
+# Internal audit / planning docs (not for publication)
+FEATURE_HEALTH_REPORT.md
+FEATURE_ELEVATION_BLUEPRINT.md

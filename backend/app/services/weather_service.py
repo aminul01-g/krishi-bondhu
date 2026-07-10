@@ -336,21 +336,20 @@ class WeatherService:
             amount_mm = 0
             reason = "পর্যাপ্ত আর্দ্রতা"
 
-            # Simulate rain forecast for rich UI based on monsoon months
-            if date_obj.month in [5, 6, 7, 8, 9] and (i == 1 or i == 4):
-                reason = "বৃষ্টির পূর্বাভাস" if i == 4 else "বৃষ্টির সম্ভাবনা"
-                sim_depletion = max(0.0, sim_depletion - 20.0)
-            else:
-                sim_depletion += crop_et
-                sim_moisture = (awc - sim_depletion) / awc if awc > 0 else 0
-                
-                if sim_moisture < threshold:
-                    irrigate = True
-                    amount_mm = round(sim_depletion)
-                    reason = "মাটি শুষ্ক" if i == 0 else "ET₀ চাহিদা"
-                    sim_depletion = 0.0  # Reset after irrigation
-                elif i == 6 and not irrigate:
-                    reason = "সাপ্তাহিক বিশ্রাম"
+            # No real rainfall forecast feed is wired into this environment, so we
+            # compute depletion from evapotranspiration ONLY — we never subtract
+            # invented rain. The schedule is labelled honestly below
+            # (forecast_available=False) so the UI does not imply a forecast.
+            sim_depletion += crop_et
+            sim_moisture = (awc - sim_depletion) / awc if awc > 0 else 0
+
+            if sim_moisture < threshold:
+                irrigate = True
+                amount_mm = round(sim_depletion)
+                reason = "মাটি শুষ্ক" if i == 0 else "ET₀ চাহিদা"
+                sim_depletion = 0.0  # Reset after irrigation
+            elif i == 6 and not irrigate:
+                reason = "সাপ্তাহিক বিশ্রাম"
 
             schedule.append({
                 "day": day_label,
@@ -375,4 +374,9 @@ class WeatherService:
             "moisture_index": round(moisture_index, 2),
             "irrigation_schedule": schedule,
             "weather_context": weather,
+            # No live rainfall-forecast feed is configured; the 7-day schedule is
+            # derived from evapotranspiration only (no invented rain). Consumers
+            # must not treat this as a forecast-driven plan.
+            "forecast_available": False,
+            "forecast_note": "no forecast available — schedule computed from ET₀ only",
         }

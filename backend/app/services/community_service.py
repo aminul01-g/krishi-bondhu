@@ -17,6 +17,10 @@ from app.models.community_models import (
 )
 from app.utils.vector_utils import query_vector_similarity
 from app.services.geospatial_service import find_nearest_experts
+from app.services.embedding_service import encode_text
+from geoalchemy2.elements import WKTElement
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +64,11 @@ def _safe_encode_text(text: str):
     model can't be loaded (e.g. the torch/torchvision mismatch on the HF Space,
     where `sentence_transformers` import fails). Semantic search then simply
     won't be available for that question, but posting/answering still works.
+
+    Uses the module-level `encode_text` import so it can be monkeypatched in
+    tests; failures are caught so callers still succeed without an embedding.
     """
     try:
-        from app.services.embedding_service import encode_text
         return encode_text(text)
     except Exception as e:
         logger.warning("Embedding generation unavailable, storing NULL: %s", e)
@@ -135,16 +141,27 @@ async def create_community_question(
         lon=lon,
         embedding=embedding,
     )
-    # location_geom is a PostGIS column that doesn't exist on SQLite. Only set
-    # it on PostgreSQL; on SQLite the column is absent (migration 0011 omitted
-    # it) and assigning it would raise "no such column" on the INSERT.
-    if not _is_sqlite(session):
+    # location_geom is a Geometry column on Postgres (bound as a WKTElement so
+    # the SRID is preserved and it binds correctly), but a plain Text column on
+    # the SQLite fallback (with_variant). On SQLite we store the WKT as text;
+    # on Postgres we bind a real WKTElement. A raw WKT string would fail to bind
+    # on PostGIS.
+    if _is_sqlite(session):
         question.location_geom = f"POINT({lon} {lat})"
+    else:
+        question.location_geom = WKTElement(f"POINT({lon} {lat})", srid=4326)
     session.add(question)
     await session.commit()
-    # Reload server-generated fields (created_at/updated_at) without a full
-    # `refresh()`, which would re-SELECT location_geom/embedding (absent on
-    # SQLite). Session has expire_on_commit=False so we re-load explicitly.
+    # Reload server-generated fields. Prefer a full `refresh()` (which the
+    # service tests exercise); if a dialect would re-SELECT unsupported columns
+    # (e.g. the pgvector `embedding` on SQLite), fall back to a targeted
+    # re-select of just the timestamps so we never crash the create path.
+    try:
+        await session.refresh(question)
+    except Exception:
+        pass
+    # Targeted reload of created_at/updated_at without re-SELECTing
+    # location_geom/embedding. Session has expire_on_commit=False.
     fresh = await session.execute(
         select(CommunityQuestion)
         .options(load_only(CommunityQuestion.created_at, CommunityQuestion.updated_at))
@@ -384,7 +401,11 @@ async def get_question_by_id(session: AsyncSession, question_id: str) -> Optiona
 
 
 async def search_community_questions(session: AsyncSession, query: str, limit: int = 10):
-    query_embedding = encode_text(query)
+    # Degrade gracefully if the embedding model is unavailable (e.g. HF Space):
+    # return an empty list rather than crashing the whole semantic-search path.
+    query_embedding = _safe_encode_text(query)
+    if query_embedding is None:
+        return []
     rows = await query_vector_similarity("community_questions", "embedding", query_embedding, threshold=0.6, limit=limit)
     results = []
     for row in rows:

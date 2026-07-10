@@ -142,27 +142,39 @@ async def verify_product(
             lon=payload.lon,
         )
 
-        # 2. Use specialized MarketAnalysisCrew to interpret the result and provide a warning/advice
-        verify_task = Task(
-            description=(
-                f"Interpret the product scan result: {scan_result}. "
-                "If the product is unverified or suspected fake, explain the risks clearly "
-                "and suggest a verified local dealer nearby."
-            ),
-            expected_output="A clear verdict (Verified/Suspected/Unknown) with detailed advice on product authenticity and local alternatives.",
-            agent=procurement_advisor
-        )
+        # 2. Optionally enrich with the MarketAnalysisCrew verdict. This is a
+        #    best-effort, non-blocking enhancement: if the LLM/CrewAI path fails
+        #    for any reason (offline, import error, timeout), we still return the
+        #    raw scan result so the scan endpoint never depends on the LLM.
+        ai_verdict = None
+        try:
+            verify_task = Task(
+                description=(
+                    f"Interpret the product scan result: {scan_result}. "
+                    "If the product is unverified or suspected fake, explain the risks clearly "
+                    "and suggest a verified local dealer nearby."
+                ),
+                expected_output="A clear verdict (Verified/Suspected/Unknown) with detailed advice on product authenticity and local alternatives.",
+                agent=procurement_advisor
+            )
 
-        crew_obj = MarketAnalysisCrew()
-        crew = crew_obj.create_crew(tasks=[verify_task])
+            crew_obj = MarketAnalysisCrew()
+            crew = crew_obj.create_crew(tasks=[verify_task])
 
-        inputs = {
-            "user_input": "Is this product authentic?",
-            "scan_data": scan_result,
-            "user_id": current_user.external_id
-        }
+            inputs = {
+                "user_input": "Is this product authentic?",
+                "scan_data": scan_result,
+                "user_id": current_user.external_id
+            }
 
-        ai_verdict = await asyncio.to_thread(crew.kickoff, inputs=inputs)
+            ai_verdict = await asyncio.to_thread(crew.kickoff, inputs=inputs)
+            ai_verdict = str(ai_verdict)
+        except Exception as e:
+            logger.warning(
+                "AI product-verification verdict failed; returning raw scan result",
+                error=str(e),
+            )
+            ai_verdict = None
 
         import uuid
         scan_id = scan_result.get("scan_id")
@@ -172,7 +184,7 @@ async def verify_product(
 
         return {
             "scan_result": scan_result,
-            "ai_verdict": str(ai_verdict)
+            "ai_verdict": ai_verdict
         }
     except Exception as e:
         logger.error(f"Product verification failed: {e}")

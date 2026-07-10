@@ -150,3 +150,62 @@ async def seed_phase3_data():
 
 if __name__ == "__main__":
     asyncio.run(seed_phase3_data())
+
+
+async def ensure_verified_products():
+    """Idempotently seed the product verification registry on app startup.
+
+    The marketplace ``/scan`` endpoint can only confirm a genuine product when
+    the `VerifiedProduct` registry is populated. This guarded seed runs once at
+    boot and never duplicates existing rows (it is a no-op once the registry
+    already contains entries), so it is safe to call on every startup.
+
+    Failures are logged and swallowed — a seed problem must never block app boot.
+    """
+    SEED_PRODUCTS = [
+        VerifiedProduct(
+            barcode="8901234567890",
+            qr_code="QR1234567890",
+            product_name="SuperGrow Fertilizer",
+            manufacturer="AgroTech Ltd.",
+            batch_number="SGF-2026-001",
+            active_ingredient="NPK 15-15-15",
+            npk_ratio="15-15-15",
+            dose_per_application="50 gm per decimal",
+            expiry_date=(datetime.utcnow() + timedelta(days=365)).date(),
+        ),
+        VerifiedProduct(
+            barcode="8909876543210",
+            qr_code="QR9876543210",
+            product_name="PestShield Insecticide",
+            manufacturer="GreenField Agro",
+            batch_number="PSI-2026-010",
+            active_ingredient="Chlorpyrifos 20%",
+            npk_ratio="",
+            dose_per_application="20 ml per liter",
+            expiry_date=(datetime.utcnow() + timedelta(days=180)).date(),
+        ),
+    ]
+    try:
+        async with AsyncSessionLocal() as session:
+            from sqlalchemy import select, func
+
+            existing = (await session.execute(
+                select(func.count()).select_from(VerifiedProduct)
+            )).scalar_one()
+            if existing and existing > 0:
+                logger.info(
+                    "VerifiedProduct registry already populated; skipping seed",
+                    count=existing,
+                )
+                return
+
+            for product in SEED_PRODUCTS:
+                session.add(product)
+            await session.commit()
+            logger.info(
+                "Seeded VerifiedProduct registry on startup",
+                count=len(SEED_PRODUCTS),
+            )
+    except Exception as e:  # never block boot on a seed failure
+        logger.warning("VerifiedProduct startup seed failed", error=str(e))

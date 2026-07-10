@@ -61,15 +61,17 @@ export default function TraceabilityPage() {
       const res = await postHarvestBatch({
         crop,
         quantity: parseFloat(quantity),
-        inputs,
+        inputs_used: inputs,
         unit,
       });
-      setBatch(res);
+      // Response is `{ status, data }`; the batch fields live under `data`.
+      const data = res.data || res;
+      setBatch(data);
       // Pre-fill the consumer scan box for convenience.
       setScan({
-        batch: res.batch_id,
-        h: res.current_hash,
-        t: res.trace_token,
+        batch: data.batch_id,
+        h: data.current_hash,
+        t: data.trace_token,
       });
     } catch (e) {
       setRegisterError(e.message || 'Failed to register batch.');
@@ -83,7 +85,9 @@ export default function TraceabilityPage() {
     setVerifying(true);
     setIntegrity(null);
     try {
-      setIntegrity(await getBatchIntegrity(batch.batch_id));
+      const res = await getBatchIntegrity(batch.batch_id);
+      // Response is `{ status, data }`; the integrity result lives under `data`.
+      setIntegrity(res?.data ?? res);
     } catch (e) {
       setIntegrity({ verified: false, error: e.message || 'Verification failed.' });
     } finally {

@@ -25,7 +25,11 @@ class MarketService:
         except Exception as e:
             logger.warning(f"Redis unavailable in MarketService: {e}")
             self.redis = None
-        self.models_dir = "backend/models"
+        # Resolve the Prophet models directory to an absolute path anchored at
+        # the backend/ package root so model loading works regardless of the
+        # process working directory (e.g. when started from the repo root).
+        _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.models_dir = os.path.join(_backend_dir, "models")
         self._model_cache = {}
 
     @staticmethod
@@ -114,9 +118,12 @@ class MarketService:
 
     async def get_current_prices(self, crop: str, lat: Optional[float] = None, lon: Optional[float] = None) -> Dict[str, Any]:
         """
-        Fetches current wholesale prices with real mandi distances and honest
-        provenance. Uses a live DAM feed when configured, otherwise a calibrated
-        seasonal simulation (clearly flagged `simulated`).
+        Fetches current wholesale prices with honest provenance.
+
+        Uses a live DAM feed when configured, otherwise a calibrated seasonal
+        simulation (clearly flagged `simulated`). NOTE: mandi distances are only
+        available in simulated mode — the live DAM feed carries no coordinates, so
+        `current_prices` entries from a live feed have `distance_km=None`.
         """
         crop = self.normalize_crop(crop)
         if not crop or crop == "none":

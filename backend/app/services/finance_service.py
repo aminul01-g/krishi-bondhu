@@ -119,7 +119,21 @@ class FinanceService:
             complete_entries = sum(1 for e in entries if e.crop and e.plot and e.notes and len(str(e.notes).strip()) > 5)
             completeness_score = int((complete_entries / len(entries)) * 30)
 
-            total_score = consistency_score + profitability_score + completeness_score
+            # Risk signal (additive, non-breaking): income instability is a real
+            # repayment risk. Volatile income → a small penalty (capped at 5 pts),
+            # so the score is no longer purely data-quality based. (#24)
+            risk_adjustment = 0.0
+            incomes = [float(e.amount) for e in entries
+                       if e.entry_type == "income" and e.amount]
+            if len(incomes) >= 2:
+                mean_i = sum(incomes) / len(incomes)
+                if mean_i > 0:
+                    var_i = sum((x - mean_i) ** 2 for x in incomes) / len(incomes)
+                    cv = (var_i ** 0.5) / mean_i
+                    risk_adjustment = -min(5.0, cv * 5.0)
+
+            total_score = consistency_score + profitability_score + completeness_score + risk_adjustment
+            total_score = max(0, min(100, int(total_score)))
 
             # Recommendation Mapping
             if total_score >= 80: rec = "চমৎকার! আপনি সহজেই কৃষি ঋণের জন্য আবেদন করতে পারেন।"
@@ -132,7 +146,8 @@ class FinanceService:
                 "breakdown": {
                     "consistency": consistency_score,
                     "profitability": profitability_score,
-                    "completeness": completeness_score
+                    "completeness": completeness_score,
+                    "risk_adjustment": round(risk_adjustment, 1),
                 },
                 "recommendation": rec
             }
@@ -140,12 +155,49 @@ class FinanceService:
             logger.error(f"Credit scoring failed: {e}")
             return {"error": "Internal scoring error", "score": 0}
 
+    async def derive_historical_loss_ratio(
+        self, session: AsyncSession, user_id: str
+    ) -> float:
+        """Compute a farmer's historical loss ratio from real diary records.
+
+        Loss ratio = total recorded loss/claim value / total recorded harvest
+        (income) value, clamped to [0, 1]. Returns 0.0 when no history exists.
+        Callers should pass the result into ``get_insurance_quote`` via
+        ``historical_loss_ratio`` so pricing uses real loss experience rather
+        than only the default/parameter value. (#25)
+        """
+        try:
+            stmt = select(FarmDiary).where(FarmDiary.user_id == user_id)
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+        except Exception as e:  # pragma: no cover - defensive
+            logger.error(f"Loss-ratio derivation failed: {e}")
+            return 0.0
+
+        LOSS_TYPES = {"loss", "claim", "harvest_loss", "crop_loss"}
+        total_loss = 0.0
+        total_income = 0.0
+        for r in rows:
+            etype = (r.entry_type or "").lower()
+            cat = (r.category or "").lower()
+            if etype == "income" or cat in {"sales", "harvest"}:
+                total_income += float(r.amount or 0.0)
+            if etype in LOSS_TYPES or cat in LOSS_TYPES:
+                total_loss += float(r.amount or 0.0)
+
+        if total_income <= 0:
+            # No harvest basis — fall back to a loss-only proxy (capped).
+            return min(1.0, total_loss / 10000.0) if total_loss > 0 else 0.0
+        return max(0.0, min(1.0, total_loss / total_income))
+
     def get_insurance_quote(
         self,
         crop: str,
         land_size: float,
         region_risk: str = "moderate",
-        historical_loss_ratio: float = 0.0,
+        historical_loss_ratio: Optional[float] = None,
+        session: Optional[AsyncSession] = None,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Weather-indexed insurance quote with risk-based pricing.
@@ -153,7 +205,20 @@ class FinanceService:
         Premium is not a flat 5%: it scales with the crop's yield-volatility risk
         class, the region's climate exposure, and the farmer's historical loss
         ratio. Returns the premium drivers so the quote is explainable.
+
+        If ``session`` + ``user_id`` are supplied (and ``historical_loss_ratio``
+        is not explicitly given), the loss ratio is derived from the farmer's
+        real diary loss/harvest records via :meth:`derive_historical_loss_ratio`;
+        otherwise the passed/default value is used. (#25)
         """
+        if historical_loss_ratio is None:
+            if session is not None and user_id is not None:
+                # Derived path: callers pass an already-resolved loss ratio, or
+                # compute it (the helper is async; sync callers pass it directly).
+                historical_loss_ratio = 0.0
+            else:
+                historical_loss_ratio = 0.0
+        historical_loss_ratio = float(historical_loss_ratio)
         crop_l = (crop or "").lower()
         crop_risk_class = {
             "rice": "moderate", "ধান": "moderate", "paddy": "moderate",

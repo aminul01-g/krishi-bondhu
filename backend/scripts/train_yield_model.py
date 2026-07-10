@@ -7,8 +7,13 @@ Phase 1 — agronomy-grounded training data.
 The model learns *real relationships* (NDVI, water availability, temperature,
 historical yield, input level) instead of uniform random noise. If a real
 labeled dataset is available, point YIELD_TRAIN_CSV at it (columns:
-crop, ndvi, rainfall_mm, temp_mean, humidity, historical_avg_yield,
-input_cost_normalized, yield_tons_per_bigha) and it will be used directly.
+crop, ndvi, rainfall_mm, temp_mean, humidity, input_cost_normalized,
+yield_tons_per_bigha) and it will be used directly. Note: historical_avg_yield
+is deliberately NOT a model feature (it leaks the target); generate_agronomy_data
+still emits it for transparency but the model never sees it.
+
+RAIN UNIT CONTRACT: rainfall_mm is a MONTHLY total (mm/month, ~200–2000). This
+must match what yield_service._get_weather_features feeds at inference time.
 
 Output: backend/models/yield_model.pkl
 """
@@ -69,8 +74,10 @@ def generate_agronomy_data(n_samples: int = 800, seed: int = 42) -> pd.DataFrame
 
 def load_real_csv(path: str) -> pd.DataFrame:
     df = pd.read_csv(path)
+    # historical_avg_yield is intentionally NOT a model feature (it leaks the
+    # target). A real labeled CSV need not provide it.
     required = ["crop", "ndvi", "rainfall_mm", "temp_mean", "humidity",
-                "historical_avg_yield", "input_cost_normalized", "yield_tons_per_bigha"]
+                "input_cost_normalized", "yield_tons_per_bigha"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"CSV missing required columns: {missing}")
@@ -99,7 +106,7 @@ def main() -> None:
     df["crop_encoded"] = le.fit_transform(df["crop"])
 
     feature_cols = ["crop_encoded", "ndvi", "rainfall_mm", "temp_mean",
-                    "humidity", "historical_avg_yield", "input_cost_normalized"]
+                    "humidity", "input_cost_normalized"]
     X = df[feature_cols].values
     y = df["yield_tons_per_bigha"].values
 

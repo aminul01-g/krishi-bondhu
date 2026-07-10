@@ -31,7 +31,12 @@ class FarmDiary(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True, nullable=False) # Store external_id for easy query
     date = Column(DateTime(timezone=True), server_default=func.now())
-    entry_type = Column(String, nullable=False)  # 'expense', 'income', 'yield'
+    # Allowed agronomic event types. Originally only 'expense', 'income', 'yield'
+    # but the blueprint later introduced 'feeding' (livestock/fodder events) and
+    # 'carbon' (carbon-credit / sustainability events), plus other operational
+    # events. Stored as a free String so new event types can be added without a
+    # migration and without breaking the SQLite create_all path.
+    entry_type = Column(String, nullable=False)  # 'expense', 'income', 'yield', 'feeding', 'carbon', ...
     category = Column(String, nullable=True)  # e.g., 'fertilizer', 'labor', 'sales'
     amount = Column(Float, nullable=False)
     unit = Column(String, nullable=True)  # 'BDT', 'kg', 'mon'

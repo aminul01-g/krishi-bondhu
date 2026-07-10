@@ -3,7 +3,6 @@ import os
 import mimetypes
 import json
 import requests
-import google.generativeai as genai
 from dotenv import load_dotenv
 import librosa
 import soundfile as sf
@@ -24,10 +23,23 @@ GOOGLE_SPEECH_CREDENTIALS_JSON = os.getenv("GOOGLE_SPEECH_CREDENTIALS_JSON") or 
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 HUGGINGFACE_SPEECH_MODEL = os.getenv("HUGGINGFACE_SPEECH_MODEL", "openai/whisper-large-v2")
 
-# Initialize Gemini model for audio (can reuse the one from LLM service or separate)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel('models/gemini-2.5-flash')
+
+# TODO(#33): Google has ended support for the legacy `google.generativeai` SDK
+# (import-time `genai.configure()` is deprecated and will break). We migrate STT to
+# the supported `google-genai` SDK. The client is created lazily inside
+# `_get_gemini_client()` so a missing SDK or missing API key can NEVER crash
+# `import app.services.audio` — transcription simply degrades to the other fallbacks.
+def _get_gemini_client():
+    """Return a `google-genai` client, or None if the SDK/key is unavailable."""
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        from google import genai
+        return genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as exc:  # pragma: no cover - SDK import/construct guard
+        logger.warning("google-genai unavailable; Gemini STT disabled", error=str(exc))
+        return None
 
 def detect_language_from_text(text: str) -> str:
     """
@@ -81,7 +93,7 @@ def is_unclear_transcript(transcript: str) -> bool:
 
 def transcribe_with_gemini(audio_path: str) -> dict:
     """
-    Transcribe audio using Gemini API.
+    Transcribe audio using the Gemini API via the supported `google-genai` SDK.
     """
     try:
         if not os.path.exists(audio_path):
@@ -89,10 +101,9 @@ def transcribe_with_gemini(audio_path: str) -> dict:
             return {"text": "", "language": "en"}
 
         logger.info("Reading audio file for Gemini", path=audio_path)
-        import mimetypes
         with open(audio_path, 'rb') as f:
             audio_data = f.read()
-            
+
         mime_type, _ = mimetypes.guess_type(audio_path)
         if not mime_type:
             if audio_path.lower().endswith('.wav'):
@@ -101,23 +112,27 @@ def transcribe_with_gemini(audio_path: str) -> dict:
                 mime_type = 'audio/mpeg'
             else:
                 mime_type = 'audio/webm'
-            
+
         logger.info("Using audio MIME type", mime_type=mime_type)
         logger.info("Generating transcription with Gemini")
-        
-        try:
-            from google.generativeai.types import Part
-            audio_part = Part.from_data(data=audio_data, mime_type=mime_type)
-            response = gemini_model.generate_content([audio_part, GEMINI_TRANSCRIPTION_PROMPT])
-        except ImportError:
-            import base64
-            audio_b64 = base64.b64encode(audio_data).decode('utf-8')
-            data_uri = f"data:{mime_type};base64,{audio_b64}"
-            response = gemini_model.generate_content([data_uri, GEMINI_TRANSCRIPTION_PROMPT])
-            
+
+        client = _get_gemini_client()
+        if client is None:
+            logger.warning("Gemini client unavailable (missing key or SDK); skipping Gemini STT")
+            return {"text": "", "language": "en", "unclear": True}
+
+        from google.genai import types
+        response = client.models.generate_content(
+            model="models/gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=audio_data, mime_type=mime_type),
+                GEMINI_TRANSCRIPTION_PROMPT,
+            ],
+        )
+
         if not response:
             raise Exception("Empty response from Gemini transcription")
-            
+
         transcript_text = None
         if hasattr(response, 'text') and response.text:
             logger.debug("Raw Gemini STT Response text", text=response.text)
@@ -125,18 +140,18 @@ def transcribe_with_gemini(audio_path: str) -> dict:
         elif hasattr(response, 'candidates') and response.candidates and len(response.candidates) > 0:
             candidate = response.candidates[0]
             if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                transcript_text = ''.join([part.text for part in candidate.content.parts if hasattr(part, 'text')])
+                transcript_text = ''.join([getattr(part, 'text', '') for part in candidate.content.parts])
             elif hasattr(candidate, 'text'):
                 transcript_text = candidate.text
-                
+
         if not transcript_text or not transcript_text.strip():
             raise Exception("Empty transcription from Gemini API")
-            
+
         transcript_text = transcript_text.strip()
-        
+
         # Detect language
         language = detect_language_from_text(transcript_text)
-        
+
         if transcript_text == "EMPTY_AUDIO":
              logger.info("Transcription returned EMPTY_AUDIO. Returning empty string")
              return {"text": "", "language": "en", "unclear": True}
