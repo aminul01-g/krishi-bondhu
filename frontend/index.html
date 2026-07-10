@@ -9,6 +9,22 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="icon" type="image/png" href="/pwa-192x192.png" />
   <link rel="apple-touch-icon" href="/pwa-192x192.png" />
+
+  <!-- Leaflet (map library) loaded from CDN. We intentionally do NOT `npm install`
+       leaflet / react-leaflet because outbound network is blocked in this
+       environment; the app uses the global `window.L`. If the CDN is unreachable
+       (offline), FieldHubPage renders a graceful fallback notice instead of
+       crashing. Bundling react-leaflet is a follow-up once install/network works. -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+
   <title>কৃষি বন্ধু | KrishiBondhu</title>
 </head>
 <body>

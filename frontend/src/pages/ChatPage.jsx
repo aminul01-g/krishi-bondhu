@@ -50,12 +50,137 @@ function TtsBanner({ onEnable, onDismiss }) {
 }
 
 /* ─────────────────────────────────────────────
+   "Context used" / Sources side panel
+   Honest scaffold: the backend does not yet stream
+   citation/tool events, so we show the signals that
+   were actually sent to the assistant (GPS + language)
+   and a clear note. The `sources` array is the
+   extension point for real provenance once the backend
+   begins emitting `citation` / `tool` SSE events.
+───────────────────────────────────────────── */
+function SourcesPanel({ onClose, sources, tools, lat, lon, langLabel }) {
+  const { t } = useTranslation();
+  const hasGps = lat != null && lon != null;
+  return (
+    <aside
+      className="w-72 lg:w-80 flex-shrink-0 flex flex-col bg-surface shadow-card rounded-2xl p-4 overflow-y-auto"
+      aria-label="Context used"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-sm text-text-primary flex items-center gap-1.5">
+          📚 {t('chat.context') || 'Context used'}
+        </h3>
+        <button
+          onClick={onClose}
+          className="text-text-secondary hover:text-text-primary transition-colors"
+          title="Close context panel"
+          aria-label="Close context panel"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Signals actually sent to the model */}
+      <section className="mb-4">
+        <h4 className="text-xs uppercase tracking-wide text-text-secondary mb-2">
+          Signals sent
+        </h4>
+        <ul className="space-y-2 text-sm">
+          <li className="flex items-start gap-2">
+            <span aria-hidden="true">📍</span>
+            <span>
+              {hasGps ? (
+                <span className="font-medium text-text-primary">
+                  GPS: {Number(lat).toFixed(4)}, {Number(lon).toFixed(4)}
+                </span>
+              ) : (
+                <span className="text-text-secondary">GPS: not shared</span>
+              )}
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span aria-hidden="true">🌐</span>
+            <span>
+              <span className="font-medium text-text-primary">Language: </span>
+              <span className="text-text-secondary">{langLabel}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      {/* Citations — populated by the backend's `citation` SSE events */}
+      <section className="mb-4">
+        <h4 className="text-xs uppercase tracking-wide text-text-secondary mb-2">
+          Sources cited
+        </h4>
+        {sources.length === 0 ? (
+          <p className="text-sm text-text-secondary leading-relaxed">
+            Cited sources will appear here as the assistant gathers them.
+          </p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {sources.map((s, i) => (
+              <li key={i} className="rounded-lg bg-bg px-3 py-2">
+                {s.url ? (
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-primary hover:underline"
+                  >
+                    🔗 {s.title}
+                  </a>
+                ) : (
+                  <div className="font-medium text-text-primary">{s.title}</div>
+                )}
+                {s.detail && (
+                  <div className="text-text-secondary text-xs mt-0.5">{s.detail}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Tools used — populated by the backend's `tool` SSE events */}
+      <section>
+        <h4 className="text-xs uppercase tracking-wide text-text-secondary mb-2">
+          Tools used
+        </h4>
+        {tools.length === 0 ? (
+          <p className="text-sm text-text-secondary leading-relaxed">
+            Live farm tools used to ground the answer will appear here.
+          </p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {tools.map((tl, i) => (
+              <li key={i} className="rounded-lg bg-bg px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden="true">{tl.called ? '✅' : '⚠️'}</span>
+                  <span className="font-medium text-text-primary">{tl.name}</span>
+                </div>
+                {tl.called && tl.summary && (
+                  <div className="text-text-secondary text-xs mt-0.5">{tl.summary}</div>
+                )}
+                {!tl.called && tl.error && (
+                  <div className="text-text-secondary text-xs mt-0.5">not run: {tl.error}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </aside>
+  );
+}
+
+/* ─────────────────────────────────────────────
    ChatPage
 ───────────────────────────────────────────── */
 
 /* ─── Blinking cursor animation (injected once into <head>) ─────────────── */
 const CURSOR_STYLE_ID = 'kb-stream-cursor-style';
-if (!document.getElementById(CURSOR_STYLE_ID)) {
+if (typeof document !== 'undefined' && !document.getElementById(CURSOR_STYLE_ID)) {
   const style = document.createElement('style');
   style.id = CURSOR_STYLE_ID;
   style.textContent = `
@@ -75,8 +200,16 @@ if (!document.getElementById(CURSOR_STYLE_ID)) {
   document.head.appendChild(style);
 }
 
+/* Suggested starter prompts for the empty state (works in either language). */
+const STARTER_PROMPTS = [
+  'আমার ধানের গাছ হলুদ হয়ে যাচ্ছে, কী করব?',
+  'আজকের আবহাওয়া কেমন থাকবে?',
+  'বাজারে টমেটোর সাম্প্রতিক দাম কত?',
+  'What fertilizer should I use for boro rice?',
+];
+
 export default function ChatPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { lat, lon } = useGeolocation();
 
   // ── State ──────────────────────────────────
@@ -86,6 +219,19 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
+
+  // Provenance extension point — populated by `citation` / `tool` SSE events
+  // streamed from the backend. Never populated with fabricated data.
+  const [sources, setSources] = useState([]);
+  const [toolsUsed, setToolsUsed] = useState([]);
+
+  // Collapsible "Context used" side panel
+  const [showSources, setShowSources] = useState(true);
+
+  // Online/offline awareness (graceful offline state)
+  const [offline, setOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
 
   // TTS preference: read from localStorage, default true
   const [ttsEnabled, setTtsEnabled] = useState(() => {
@@ -110,6 +256,14 @@ export default function ChatPage() {
 
   // ── Helpers ────────────────────────────────
 
+  /** Human-readable label for the currently selected UI language. */
+  const getLangLabel = useCallback(() => {
+    const code = (i18n.language || localStorage.getItem('kb_lang') || 'bn')
+      .toLowerCase();
+    if (code.startsWith('bn')) return 'বাংলা (Bengali)';
+    if (code.startsWith('en')) return 'English';
+    return code.toUpperCase();
+  }, [i18n.language]);
 
   const persistTts = (val) => {
     setTtsEnabled(val);
@@ -145,6 +299,18 @@ export default function ChatPage() {
     [ttsEnabled, playTts]
   );
 
+  // Track connectivity for the offline state.
+  useEffect(() => {
+    const goOnline = () => setOffline(false);
+    const goOffline = () => setOffline(true);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
   // Cleanup audio on unmount
   useEffect(() => {
     return () => {
@@ -178,11 +344,18 @@ export default function ChatPage() {
   }, [messages, scrollToBottom]);
 
   /* ── Streaming text send ───────────────────────────────────────────────── */
-  const sendText = async () => {
-    if (!input.trim() || loading) return;
-    const text = input.trim();
+  const sendText = async (override) => {
+    const text = (override ?? input).trim();
+    if (!text || loading) return;
+    // Offline guard — never fire a request with no connection.
+    if (offline) return;
+
     setInput('');
     setLoading(true);
+
+    // Reset provenance for this new turn — the panel reflects the latest answer.
+    setSources([]);
+    setToolsUsed([]);
 
     /* 1. Push user bubble */
     setMessages((m) => [...m, { role: 'user', content: text, ts: Date.now() }]);
@@ -190,7 +363,7 @@ export default function ChatPage() {
     /* 2. Push an empty streaming assistant bubble */
     setMessages((m) => [
       ...m,
-      { role: 'assistant', content: '', ts: Date.now(), streaming: true },
+      { role: 'assistant', content: '', ts: Date.now(), streaming: true, citations: [], tools: [] },
     ]);
 
     try {
@@ -198,7 +371,9 @@ export default function ChatPage() {
         text,
         lat,
         lon,
-        /* onChunk */ (chunk) => {
+        /* onChunk — backend sends incremental pieces; append to grow the
+           cumulative reply. (api.js forwards each piece via onChunk.) */
+        (chunk) => {
           setMessages((m) => {
             const copy = [...m];
             const last = copy[copy.length - 1];
@@ -208,7 +383,8 @@ export default function ChatPage() {
             return copy;
           });
         },
-        /* onDone */ (fullText, tts_path) => {
+        /* onDone */
+        (fullText, tts_path) => {
           setMessages((m) => {
             const copy = [...m];
             const last = copy[copy.length - 1];
@@ -227,7 +403,8 @@ export default function ChatPage() {
             setTimeout(() => maybeAutoPlay(tts_path, messages.length + 1), 50);
           }
         },
-        /* onError */ (errMsg) => {
+        /* onError */
+        (errMsg) => {
           setMessages((m) => {
             const copy = [...m];
             const last = copy[copy.length - 1];
@@ -249,7 +426,43 @@ export default function ChatPage() {
             return copy;
           });
           setLoading(false);
-        }
+        },
+        /* onCitation — a retrieved knowledge source; record it (never fake it) */
+        (c) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                citations: [...(last.citations || []), c],
+              };
+            }
+            return copy;
+          });
+          setSources((prev) => [
+            ...prev,
+            { title: c.title, detail: c.snippet, url: c.url, score: c.score },
+          ]);
+        },
+        /* onTool — a farm tool the orchestrator invoked; record it (never fake it) */
+        (t) => {
+          setMessages((m) => {
+            const copy = [...m];
+            const last = copy[copy.length - 1];
+            if (last?.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                tools: [...(last.tools || []), t],
+              };
+            }
+            return copy;
+          });
+          setToolsUsed((prev) => [
+            ...prev,
+            { name: t.name, called: t.called, summary: t.summary, provenance: t.provenance, error: t.error },
+          ]);
+        },
       );
     } catch (err) {
       /* Catch unexpected rejections */
@@ -341,135 +554,235 @@ export default function ChatPage() {
     }
   };
 
-      /* ── Render ───────────────────────────────────────────────────────────── */
+  /* ── Render ───────────────────────────────────────────────────────────── */
+  const isEmptyState = messages.length === 1 && messages[0].role === 'assistant';
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-
       {/* ── TTS Onboarding Banner ── */}
       {showBanner && (
         <TtsBanner onEnable={handleBannerEnable} onDismiss={handleBannerDismiss} />
       )}
 
-      {/* ── Top controls bar with TTS toggle ── */}
-      <div className="flex items-center justify-end gap-2 pb-2">
-        <button
-          id="tts-toggle"
-          onClick={() => persistTts(!ttsEnabled)}
-          className={`tts-toggle ${ttsEnabled ? 'tts-toggle--on' : 'tts-toggle--off'}`}
-          title={ttsEnabled ? 'Mute voice replies' : 'Enable voice replies'}
-          aria-label={ttsEnabled ? 'Mute voice replies' : 'Enable voice replies'}
-          aria-pressed={ttsEnabled}
-        >
-          {ttsEnabled ? '🔊' : '🔇'}
-        </button>
-      </div>
-
-      {/* ── Messages ── */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-4 -mx-4 px-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed relative
-                ${msg.role === 'user'
-                  ? 'bg-primary text-white rounded-br-md'
-                  : msg.error
-                    ? 'bg-danger-light text-danger rounded-bl-md'
-                    : 'bg-surface shadow-card text-text-primary rounded-bl-md'
-                }`}
+      <div className="flex flex-1 min-h-0 gap-3">
+        {/* ── Main chat column ── */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {/* ── Top controls bar with TTS toggle + context panel toggle ── */}
+          <div className="flex items-center justify-end gap-2 pb-2">
+            <button
+              onClick={() => setShowSources((v) => !v)}
+              className={`tts-toggle ${showSources ? 'tts-toggle--on' : 'tts-toggle--off'}`}
+              title="Toggle context panel"
+              aria-label="Toggle context panel"
+              aria-pressed={showSources}
             >
-                  {/* Bot label + sound-wave indicator */}
-                  {msg.role === 'assistant' && (
-                    <span className="text-xs text-text-secondary flex items-center gap-1.5 mb-1">
-                      🤖 {t('app.name')}
-                      {playingIdx === i && <SoundWave />}
-                    </span>
-                  )}
-
-                  <div className={`prose prose-sm max-w-none text-sm leading-relaxed${msg.streaming ? ' kb-streaming-cursor' : ''}`}>
-                    <ReactMarkdown
-                      components={{
-                        h2: ({children}) => <h2 className="font-semibold text-sm mt-3 mb-1">{children}</h2>,
-                        h3: ({children}) => <h3 className="font-medium text-sm mt-2 mb-1">{children}</h3>,
-                        ul: ({children}) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
-                        li: ({children}) => <li className="text-sm">{children}</li>,
-                        strong: ({children}) => <strong className="font-semibold">{children}</strong>,
-                        p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-
-                  {/* Per-message replay button for assistant messages */}
-                  {msg.role === 'assistant' && !msg.error && msg.tts_path && (
-                    <button
-                      id={`tts-replay-${i}`}
-                      className={`tts-replay-btn ${playingIdx === i ? 'tts-replay-btn--playing' : ''}`}
-                      onClick={() => playTts(msg.tts_path, i)}
-                      title="Replay audio"
-                      aria-label="Replay audio"
-                    >
-                      {playingIdx === i ? '⏸' : '🔈'}
-                    </button>
-                  )}
-            </div>
+              📚
+            </button>
+            <button
+              id="tts-toggle"
+              onClick={() => persistTts(!ttsEnabled)}
+              className={`tts-toggle ${ttsEnabled ? 'tts-toggle--on' : 'tts-toggle--off'}`}
+              title={ttsEnabled ? 'Mute voice replies' : 'Enable voice replies'}
+              aria-label={ttsEnabled ? 'Mute voice replies' : 'Enable voice replies'}
+              aria-pressed={ttsEnabled}
+            >
+              {ttsEnabled ? '🔊' : '🔇'}
+            </button>
           </div>
-        ))}
+
+          {/* ── Offline note ── */}
+          {offline && (
+            <div
+              className="mb-3 rounded-xl bg-accent-light text-accent px-4 py-2.5 text-sm flex items-center gap-2"
+              role="alert"
+            >
+              <span aria-hidden="true">📡</span>
+              <span>
+                You appear to be offline. Replies need a connection — your
+                message will be ready to send once you're back online.
+              </span>
+            </div>
+          )}
+
+          {/* ── Messages ── */}
+          <div className="flex-1 overflow-y-auto space-y-3 pb-4 -mx-4 px-4">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed relative
+                    ${msg.role === 'user'
+                      ? 'bg-primary text-white rounded-br-md'
+                      : msg.error
+                        ? 'bg-danger-light text-danger rounded-bl-md'
+                        : 'bg-surface shadow-card text-text-primary rounded-bl-md'
+                    }`}
+                >
+                      {/* Bot label + sound-wave indicator */}
+                      {msg.role === 'assistant' && (
+                        <span className="text-xs text-text-secondary flex items-center gap-1.5 mb-1">
+                          🤖 {t('app.name')}
+                          {playingIdx === i && <SoundWave />}
+                        </span>
+                      )}
+
+                      <div className={`prose prose-sm max-w-none text-sm leading-relaxed${msg.streaming ? ' kb-streaming-cursor' : ''}`}>
+                        <ReactMarkdown
+                          components={{
+                            h2: ({children}) => <h2 className="font-semibold text-sm mt-3 mb-1">{children}</h2>,
+                            h3: ({children}) => <h3 className="font-medium text-sm mt-2 mb-1">{children}</h3>,
+                            ul: ({children}) => <ul className="list-disc list-inside space-y-1 my-2">{children}</ul>,
+                            li: ({children}) => <li className="text-sm">{children}</li>,
+                            strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                            p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+
+                      {/* Inline provenance: citations + tools streamed for THIS answer */}
+                      {msg.role === 'assistant' && msg.citations?.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {msg.citations.map((c, ci) => (
+                            <a
+                              key={ci}
+                              href={c.url || undefined}
+                              target={c.url ? '_blank' : undefined}
+                              rel="noreferrer"
+                              title={c.snippet}
+                              className="inline-flex items-center gap-1 rounded-full bg-bg border border-border px-2.5 py-1 text-xs text-text-secondary hover:text-primary transition-colors"
+                            >
+                              🔗 {c.title}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {msg.role === 'assistant' && msg.tools?.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs text-text-secondary mb-1">🛠️ Tools used</div>
+                          <ul className="flex flex-wrap gap-1.5">
+                            {msg.tools.map((tl, ti) => (
+                              <li
+                                key={ti}
+                                title={tl.summary || tl.error || ''}
+                                className={`rounded-full px-2.5 py-1 text-xs border ${
+                                  tl.called
+                                    ? 'bg-primary/10 text-primary border-primary/30'
+                                    : 'bg-bg text-text-secondary border-border'
+                                }`}
+                              >
+                                {tl.called ? '✓' : '✕'} {tl.name}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Per-message replay button for assistant messages */}
+                      {msg.role === 'assistant' && !msg.error && msg.tts_path && (
+                        <button
+                          id={`tts-replay-${i}`}
+                          className={`tts-replay-btn ${playingIdx === i ? 'tts-replay-btn--playing' : ''}`}
+                          onClick={() => playTts(msg.tts_path, i)}
+                          title="Replay audio"
+                          aria-label="Replay audio"
+                        >
+                          {playingIdx === i ? '⏸' : '🔈'}
+                        </button>
+                      )}
+                </div>
+              </div>
+            ))}
+
+            {/* Empty state: starter prompts to help the farmer begin */}
+            {isEmptyState && (
+              <div className="pt-2">
+                <p className="text-sm text-text-secondary mb-2">
+                  Try asking something like:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {STARTER_PROMPTS.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => sendText(p)}
+                      className="text-left text-xs rounded-full bg-surface shadow-card px-3 py-1.5
+                                 text-text-primary hover:bg-primary/10 transition-all"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Show thinking indicator only while waiting for the first chunk */}
             {loading && messages[messages.length - 1]?.streaming === true && messages[messages.length - 1]?.content === '' && (
-          <div className="flex justify-start">
-            <div className="bg-surface shadow-card rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
-              <Spinner size="sm" className="text-primary" />
-              <span className="text-sm text-text-secondary">{t('chat.thinking')}</span>
-            </div>
+              <div className="flex justify-start">
+                <div className="bg-surface shadow-card rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
+                  <Spinner size="sm" className="text-primary" />
+                  <span className="text-sm text-text-secondary">{t('chat.thinking')}</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
           </div>
-        )}
 
-        <div ref={bottomRef} />
-      </div>
+          {/* ── Input bar ── */}
+          <div className="flex items-center gap-2 pt-3 border-t border-border -mx-4 px-4 bg-bg">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-surface shadow-card
+                         text-lg hover:bg-primary/10 transition-all flex-shrink-0"
+              title={t('chat.attach_image')}
+            >
+              📎
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
-      {/* ── Input bar ── */}
-      <div className="flex items-center gap-2 pt-3 border-t border-border -mx-4 px-4 bg-bg">
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-surface shadow-card
-                     text-lg hover:bg-primary/10 transition-all flex-shrink-0"
-          title={t('chat.attach_image')}
-        >
-          📎
-        </button>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendText()}
+              placeholder={t('chat.placeholder')}
+              className="input-field flex-1 !py-2.5"
+              disabled={loading || offline}
+            />
 
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && sendText()}
-          placeholder={t('chat.placeholder')}
-          className="input-field flex-1 !py-2.5"
-          disabled={loading}
-        />
+            {input.trim() ? (
+              <button
+                onClick={sendText}
+                disabled={loading || offline}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white
+                           shadow-card hover:bg-primary-light transition-all flex-shrink-0"
+              >
+                ➤
+              </button>
+            ) : (
+              <button
+                onClick={recording ? stopRecording : startRecording}
+                className={`w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0
+                    shadow-card transition-all
+                    ${recording ? 'bg-danger text-white animate-pulse-record' : 'bg-surface hover:bg-primary/10'}`}
+                title={recording ? t('chat.stop') : t('chat.voice_input')}
+              >
+                {recording ? '⏹' : '🎙️'}
+              </button>
+            )}
+          </div>
+        </div>
 
-        {input.trim() ? (
-          <button
-            onClick={sendText}
-            disabled={loading}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white
-                       shadow-card hover:bg-primary-light transition-all flex-shrink-0"
-          >
-            ➤
-          </button>
-        ) : (
-          <button
-            onClick={recording ? stopRecording : startRecording}
-            className={`w-10 h-10 flex items-center justify-center rounded-full flex-shrink-0
-              shadow-card transition-all
-              ${recording ? 'bg-danger text-white animate-pulse-record' : 'bg-surface hover:bg-primary/10'}`}
-            title={recording ? t('chat.stop') : t('chat.voice_input')}
-          >
-            {recording ? '⏹' : '🎙️'}
-          </button>
+        {/* ── Context / Sources side panel ── */}
+        {showSources && (
+          <SourcesPanel
+            onClose={() => setShowSources(false)}
+            sources={sources}
+            tools={toolsUsed}
+            lat={lat}
+            lon={lon}
+            langLabel={getLangLabel()}
+          />
         )}
       </div>
     </div>

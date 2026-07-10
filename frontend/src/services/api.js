@@ -106,12 +106,14 @@ export const postChat = (message, lat, lon, image, signal) => {
  * @param {string}   message  - The user message text
  * @param {number|null} lat   - Optional latitude
  * @param {number|null} lon   - Optional longitude
- * @param {function} onChunk  - Called with each text chunk string
- * @param {function} onDone   - Called with the full reply text when stream ends
+ * @param {function} onChunk  - Called with each text chunk string (incremental delta)
+ * @param {function} onDone   - Called with (fullText, ttsPath, payload) when the stream ends
  * @param {function} onError  - Called with an error message string on failure
+ * @param {function} [onCitation] - Called with a citation event {id,title,url,snippet,score}
+ * @param {function} [onTool]      - Called with a tool event {name,called,summary,query,provenance,error}
  * @returns {Promise<void>}
  */
-export async function streamChat(message, lat, lon, onChunk, onDone, onError) {
+export async function streamChat(message, lat, lon, onChunk, onDone, onError, onCitation, onTool) {
   const formData = new FormData();
   formData.append('message', message);
   if (lat != null) formData.append('lat', lat);
@@ -162,8 +164,10 @@ export async function streamChat(message, lat, lon, onChunk, onDone, onError) {
           try {
             const data = JSON.parse(line.slice(6));
             if (data.type === 'chunk') onChunk(data.text);
-            else if (data.type === 'done') onDone(data.full_text);
+            else if (data.type === 'done') onDone(data.full_text, data.tts_path, data);
             else if (data.type === 'error') onError(data.message);
+            else if (data.type === 'citation') onCitation && onCitation(data);
+            else if (data.type === 'tool') onTool && onTool(data);
             // 'thinking' events are intentionally ignored here (UI handles loading state)
           } catch (_) {
             // Malformed JSON in a single event — skip gracefully
@@ -265,6 +269,18 @@ export const getCreditReport = (signal) =>
 export const postInsuranceQuote = (crop, landSize) =>
   request('POST', '/api/finance/insurance-quote', { body: { crop, land_size: landSize } });
 
+export const postSimulatePayout = (crop, landSize, scenario = 'drought', severity = 0.5, regionRisk = 'moderate') =>
+  request('POST', '/api/finance/simulate-payout', {
+    body: { crop, land_size: landSize, scenario, severity, region_risk: regionRisk },
+  });
+
+export const getSubsidies = (crop, landSize, signal) => {
+  const params = new URLSearchParams();
+  if (crop) params.set('crop', crop);
+  params.set('land_size', landSize || 0);
+  return request('GET', `/api/finance/subsidies?${params.toString()}`, { signal });
+};
+
 // --- Community ---
 // Legacy /questions surface (kept for backward compatibility)
 export const postCommunityQuestion = (data) =>
@@ -339,6 +355,27 @@ export const getMyPlans = (signal) =>
 export const getYieldForecast = (crop, lat, lon, signal) =>
   request('GET', `/api/planner/forecast?crop=${encodeURIComponent(crop)}&lat=${lat}&lon=${lon}`, { signal });
 
+// --- Recommendations ---
+export const getRecommendations = (lat = null, lon = null, language = 'bn', signal) => {
+  const params = new URLSearchParams();
+  if (lat != null && lon != null) {
+    params.set('lat', lat);
+    params.set('lon', lon);
+  }
+  params.set('language', language);
+  return request('GET', `/api/recommendations/recommendations?${params.toString()}`, { signal });
+};
+
+export const getPersonalizedRecommendations = (lat = null, lon = null, language = 'bn', signal) => {
+  const params = new URLSearchParams();
+  if (lat != null && lon != null) {
+    params.set('lat', lat);
+    params.set('lon', lon);
+  }
+  params.set('language', language);
+  return request('GET', `/api/recommendations/personalized?${params.toString()}`, { signal });
+};
+
 // --- Traceability ---
 export const postHarvestBatch = (data) =>
   request('POST', '/api/traceability/batches', { body: data });
@@ -346,9 +383,24 @@ export const postHarvestBatch = (data) =>
 export const getHarvestBatch = (id, signal) =>
   request('GET', `/api/traceability/batches/${id}`, { signal });
 
+export const getBatchIntegrity = (batchId, signal) =>
+  request('GET', `/api/traceability/integrity/${batchId}`, { signal });
+
+// Public, unauthenticated verification of a scanned QR token.
+export const verifyBatch = (batch, h, t, signal) => {
+  const params = new URLSearchParams();
+  params.set('batch', batch);
+  params.set('h', h);
+  params.set('t', t);
+  return request('GET', `/api/traceability/verify?${params.toString()}`, { signal });
+};
+
 // --- Sustainability ---
 export const getSustainabilityScore = (signal) =>
   request('GET', '/api/sustainability/scorecard', { signal });
 
 export const getSustainabilityOpportunities = (signal) =>
   request('GET', '/api/sustainability/opportunities', { signal });
+
+export const getCarbonFootprint = (signal) =>
+  request('GET', '/api/sustainability/carbon-footprint', { signal });

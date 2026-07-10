@@ -140,22 +140,78 @@ class FinanceService:
             logger.error(f"Credit scoring failed: {e}")
             return {"error": "Internal scoring error", "score": 0}
 
-    def get_insurance_quote(self, crop: str, land_size: float) -> Dict[str, Any]:
+    def get_insurance_quote(
+        self,
+        crop: str,
+        land_size: float,
+        region_risk: str = "moderate",
+        historical_loss_ratio: float = 0.0,
+    ) -> Dict[str, Any]:
         """
-        Calculates weather-indexed insurance quotes.
+        Weather-indexed insurance quote with risk-based pricing.
+
+        Premium is not a flat 5%: it scales with the crop's yield-volatility risk
+        class, the region's climate exposure, and the farmer's historical loss
+        ratio. Returns the premium drivers so the quote is explainable.
         """
-        base_rate = 400 if "rice" in crop.lower() or "ধান" in crop else 500
-        premium = round(land_size * base_rate * 0.05, 2)
-        payout_max = land_size * base_rate * 10
+        crop_l = (crop or "").lower()
+        crop_risk_class = {
+            "rice": "moderate", "ধান": "moderate", "paddy": "moderate",
+            "wheat": "low", "গম": "low",
+            "potato": "moderate", "আলু": "moderate",
+            "onion": "high", "পেঁয়াজ": "high",
+            "tomato": "high", "টমেটো": "high",
+            "brinjal": "moderate", "বেগুন": "moderate",
+            "chili": "high", "মরিচ": "high",
+            "mango": "moderate", "আম": "moderate",
+            "jute": "low", "পাট": "low",
+        }.get(crop_l, "moderate")
+
+        risk_multiplier = {"low": 0.8, "moderate": 1.0, "high": 1.4}[crop_risk_class]
+        region_multiplier = {"low": 0.85, "moderate": 1.0, "high": 1.3}.get(region_risk, 1.0)
+        loss_multiplier = 1.0 + min(0.5, max(0.0, historical_loss_ratio))
+
+        sum_insured_per_bigha = 400 if crop_risk_class == "low" else 500
+        sum_insured = land_size * sum_insured_per_bigha
+        # Base premium rate 4% of sum insured, scaled by risk factors.
+        base_rate = 0.04
+        premium_rate = round(base_rate * risk_multiplier * region_multiplier * loss_multiplier, 4)
+        premium = round(sum_insured * premium_rate, 2)
+        payout_max = round(sum_insured, 2)
 
         return {
             "crop": crop,
             "land_size": land_size,
+            "crop_risk_class": crop_risk_class,
+            "region_risk": region_risk,
+            "sum_insured": payout_max,
+            "premium_rate": premium_rate,
             "premium": premium,
             "payout_max": payout_max,
+            "premium_drivers": {
+                "crop_risk_class": crop_risk_class,
+                "region_multiplier": region_multiplier,
+                "loss_multiplier": round(loss_multiplier, 3),
+            },
             "triggers": [
                 "টানা ১৫ দিন বৃষ্টি না হলে (খরা)",
                 "এক দিনে ১০০ মি.মি. এর বেশি বৃষ্টি হলে (অতিবৃষ্টি)",
                 "ঝড়ে ফসলের ৫০% এর বেশি ক্ষতি হলে"
-            ]
+            ],
+        }
+
+    def simulate_payout(
+        self, crop: str, land_size: float, scenario: str = "drought",
+        severity: float = 0.5, region_risk: str = "moderate",
+    ) -> Dict[str, Any]:
+        """Estimate the payout for a given weather scenario and severity (0..1)."""
+        quote = self.get_insurance_quote(crop, land_size, region_risk=region_risk)
+        # Payout scales with severity of the triggered peril, capped at sum insured.
+        payout = round(min(quote["payout_max"], quote["payout_max"] * severity), 2)
+        return {
+            "scenario": scenario,
+            "severity": severity,
+            "estimated_payout": payout,
+            "sum_insured": quote["payout_max"],
+            "net_after_premium": round(payout - quote["premium"], 2),
         }
