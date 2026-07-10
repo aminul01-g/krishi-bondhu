@@ -6,11 +6,29 @@ Phase 3 Implementation - Feature: Input Marketplace & Quality Verification
 from sqlalchemy import Column, String, Text, Integer, Float, Date, DateTime, Boolean, ForeignKey, Index, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator
 import uuid
 from datetime import datetime
 
 from app.models.db_models import Base
-from geoalchemy2 import Geometry
+from geoalchemy2 import Geometry as _GeoAlchemyGeometry
+
+
+class _PortableGeometry(TypeDecorator):
+    """Geometry column portable across PostGIS and SQLite (see community_models)."""
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, geometry_type="POINT", srid=4326, **kw):
+        self.geometry_type = geometry_type
+        self.srid = srid
+        super().__init__()
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return _GeoAlchemyGeometry(geometry_type=self.geometry_type, srid=self.srid)
+        return Text()
 
 
 class MarketplaceListing(Base):
@@ -67,7 +85,9 @@ class Dealer(Base):
     email = Column(String(100))
     location_lat = Column(Float, nullable=False)
     location_lon = Column(Float, nullable=False)
-    location_geom = Column(Geometry(geometry_type='POINT', srid=4326))
+    # Portable geometry: real PostGIS Geometry on Postgres, plain Text on SQLite
+    # (so create_all does not emit RecoverGeometryColumn). See _PortableGeometry.
+    location_geom = Column(_PortableGeometry(geometry_type='POINT', srid=4326))
 
     is_verified = Column(Boolean, default=False, index=True)
     verification_status = Column(String(50), default='pending', index=True)

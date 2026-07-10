@@ -1,5 +1,4 @@
 import os
-import random
 import logging
 import numpy as np
 import pandas as pd
@@ -64,18 +63,37 @@ async def get_satellite_ndvi(lat: float, lon: float, season: str = "current") ->
     Vegetation index for a location.
 
     No live GEE/Sentinel feed is configured in this environment, so we return an
-    *estimated* NDVI derived from current weather (a greenness proxy) and flag it
-    via NDVI_ESTIMATED / the prediction's `ndvi_estimated` field. Replace the body
+    *estimated* NDVI derived from weather (a greenness proxy) and flag it via
+    NDVI_ESTIMATED / the prediction's `ndvi_estimated` field. Replace the body
     with a real GEE/Sentinel-Hub fetch when a feed is wired — the rest of the
     pipeline (yield model, season plan) consumes the same contract.
+
+    The `season` argument is honoured honestly: it selects the seasonal climate
+    baseline that drives the proxy (instead of always the current month). It does
+    NOT fabricate a seasonal curve on top of the weather-derived estimate.
     """
     try:
-        from app.services.weather_service import WeatherService
+        from app.services.weather_service import WeatherService, BANGLADESH_CLIMATE_AVERAGES
 
         svc = WeatherService()
         w = await svc.get_weather_data(lat, lon)
         rain = float(w.get("rainfall_mm", 50.0))
         tmean = float(w.get("temp_mean", 28.0))
+
+        # If no live feed, anchor the proxy to the requested season's climate
+        # normal rather than the current calendar month (e.g. a rabi-season
+        # estimate should not look like the current monsoon month).
+        if w.get("source") != "nasa_power" and season not in (None, "", "current"):
+            season_month = {
+                "rabi": 12, "winter": 12, "boro": 12,
+                "kharif": 7, "monsoon": 7, "aman": 7,
+                "summer": 4, "pre-monsoon": 4,
+            }.get(season.lower().strip())
+            if season_month is not None:
+                norm = BANGLADESH_CLIMATE_AVERAGES.get(season_month,
+                                                       BANGLADESH_CLIMATE_AVERAGES[6])
+                rain = float(norm["rainfall_mm"])
+                tmean = float(norm["temp_mean"])
     except Exception:
         rain, tmean = 50.0, 28.0
 
@@ -92,15 +110,28 @@ NDVI_ESTIMATED = True
 
 
 async def _get_weather_features(lat: float, lon: float) -> Dict[str, float]:
-    """Fetch weather features for yield prediction from WeatherService."""
+    """Fetch weather features for yield prediction from WeatherService.
+
+    UNIT CONTRACT (must match train_yield_model.py):
+      * `rainfall_mm` passed to the model is a MONTHLY total in mm/month, on the
+        same scale as the training data (≈200–2000).
+      * NASA POWER returns a daily average (PRECTOTCORR, mm/day) -> multiply by
+        30 to get monthly.
+      * The Bangladesh climate-average fallback is ALREADY a monthly normal, so
+        it is used as-is (the old code multiplied it by 30 too, double-counting).
+    """
     try:
         from app.services.weather_service import WeatherService
         svc = WeatherService()
         weather = await svc.get_weather_data(lat, lon)
+        src = weather.get("source", "")
+        rain_raw = float(weather.get("rainfall_mm", 500.0))
+        # Only the NASA daily feed needs daily->monthly scaling.
+        rainfall_mm = rain_raw * 30.0 if src == "nasa_power" else rain_raw
         return {
-            "rainfall_mm": weather.get("rainfall_mm", 500.0) * 30,  # Scale daily to monthly approx
-            "temp_mean": weather.get("temp_mean", 28.0),
-            "humidity": weather.get("humidity", 75.0),
+            "rainfall_mm": round(rainfall_mm, 1),
+            "temp_mean": float(weather.get("temp_mean", 28.0)),
+            "humidity": float(weather.get("humidity", 75.0)),
         }
     except Exception as e:
         logger.warning(f"Weather fetch for yield failed: {e}. Using defaults.")
@@ -114,7 +145,7 @@ async def predict_yield(
     Predicts the yield for the upcoming season.
 
     Primary path: Trained Random Forest model (loaded from yield_model.pkl).
-    Fallback path: Hybrid simulation (Base + NDVI + History + Noise).
+    Fallback path: Hybrid simulation (Base + NDVI + History), deterministic.
     """
     # 1. Get Satellite Health Index
     ndvi = await get_satellite_ndvi(lat, lon)
@@ -150,21 +181,22 @@ async def predict_yield(
             # Get weather features
             weather_feats = await _get_weather_features(lat, lon)
 
-            # Build feature vector: [crop_encoded, ndvi, rainfall_mm, temp_mean,
-            #                         humidity, historical_avg_yield, input_cost_normalized]
+            # Build feature vector. NOTE: `historical_avg_yield` is intentionally
+            # EXCLUDED from the model features — feeding a noisy copy of the true
+            # yield would let the model learn the data generator (leakage) instead
+            # of real agronomic signal. Order must match train_yield_model.py.
+            # [crop_encoded, ndvi, rainfall_mm, temp_mean, humidity, input_cost_normalized]
             features = np.array([[
                 crop_encoded,
                 ndvi,
                 weather_feats["rainfall_mm"],
                 weather_feats["temp_mean"],
                 weather_feats["humidity"],
-                avg_historical_yield if avg_historical_yield > 0 else 3.0,
-                0.5,  # Default normalized input cost
+                0.5,  # Default normalized input cost (independent of diary history)
             ]])
 
             predicted_val = float(model.predict(features)[0])
             predicted_val = max(0.1, predicted_val)
-            confidence = 0.80 if not history else min(0.95, 0.80 + (len(history) * 0.05))
             prediction_source = "random_forest"
             logger.info(f"Yield prediction via Random Forest: {predicted_val:.2f} t/bigha")
 
@@ -180,16 +212,29 @@ async def predict_yield(
         if avg_historical_yield > 0:
             predicted_val = (predicted_val * 0.7) + (avg_historical_yield * 0.3)
 
-        noise = random.uniform(-0.2, 0.2)
-        predicted_val = max(0.1, predicted_val + noise)
-        confidence = 0.6 if not history else min(0.95, 0.6 + (len(history) * 0.1))
+        # No random jitter: the same inputs must always yield the same prediction.
+        predicted_val = max(0.1, predicted_val)
+
+    # ----------------------------------------------------------------------
+    # Honest "confidence": this is DATA SUFFICIENCY, NOT a calibrated
+    # statistical confidence interval. We deliberately do NOT report a fake
+    # number implying the prediction is X% certain. It simply reflects how much
+    # supporting data / a real model backs the estimate.
+    # ----------------------------------------------------------------------
+    data_sufficiency = 0.4
+    if prediction_source == "random_forest":
+        data_sufficiency += 0.2  # a trained model backs the estimate
+    if history:
+        data_sufficiency += min(0.4, len(history) * 0.13)  # more diary records
+    data_sufficiency = max(0.0, min(1.0, data_sufficiency))
 
     return {
         "predicted_yield": round(predicted_val, 2),
         "unit": "tons/bigha",
         "ndvi": round(ndvi, 3),
         "ndvi_estimated": NDVI_ESTIMATED,
-        "confidence": round(confidence, 2),
+        "confidence": round(data_sufficiency, 2),
+        "data_sufficiency": round(data_sufficiency, 2),
         "historical_avg": round(avg_historical_yield, 2),
         "prediction_source": prediction_source,
     }

@@ -6,11 +6,29 @@ Phase 3 Implementation - Feature: Emergency & Crop Insurance Quick Claim
 from sqlalchemy import Column, String, Text, Integer, Float, DateTime, Boolean, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator
 import uuid
 from datetime import datetime
 
 from app.models.db_models import Base
-from geoalchemy2 import Geometry
+from geoalchemy2 import Geometry as _GeoAlchemyGeometry
+
+
+class _PortableGeometry(TypeDecorator):
+    """Geometry column portable across PostGIS and SQLite (see community_models)."""
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, geometry_type="POINT", srid=4326, **kw):
+        self.geometry_type = geometry_type
+        self.srid = srid
+        super().__init__()
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return _GeoAlchemyGeometry(geometry_type=self.geometry_type, srid=self.srid)
+        return Text()
 
 
 class InsuranceProvider(Base):
@@ -45,11 +63,18 @@ class DamageReport(Base):
 
     location_lat = Column(Float, nullable=False)
     location_lon = Column(Float, nullable=False)
-    location_geom = Column(Geometry(geometry_type='POINT', srid=4326))
+    # Portable geometry: real PostGIS Geometry on Postgres, plain Text on SQLite
+    # (so create_all does not emit RecoverGeometryColumn). See _PortableGeometry.
+    location_geom = Column(_PortableGeometry(geometry_type='POINT', srid=4326))
 
     damage_cause = Column(String(100), nullable=False)
     damage_estimate_percent = Column(Float, nullable=False)
     yield_loss_estimate_percent = Column(Float, nullable=False)
+
+    # Triage severity derived from the damage/yield-loss percentages
+    # (low/medium/high/critical). Computed in create_damage_report so reports
+    # carry an SLA/escalation signal even before human review.
+    severity = Column(String(20), default="low", index=True)
 
     number_of_photos = Column(Integer, default=0)
     voice_statement_transcribed = Column(Text)

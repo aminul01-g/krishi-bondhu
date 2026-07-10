@@ -6,12 +6,37 @@ Phase 3 Implementation - Feature: Community Q&A & Local Expert Connect
 from sqlalchemy import Column, String, Text, Integer, Float, DateTime, Boolean, ForeignKey, Index, JSON, ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import TypeDecorator
 from pgvector.sqlalchemy import Vector
 import uuid
 from datetime import datetime
 
 from app.models.db_models import Base
-from geoalchemy2 import Geometry
+from geoalchemy2 import Geometry as _GeoAlchemyGeometry
+
+
+class _PortableGeometry(TypeDecorator):
+    """Geometry column that works on both PostGIS and SQLite.
+
+    On PostgreSQL the underlying column is a real PostGIS ``Geometry`` (so
+    ST_GeomFromText / spatial queries work). On SQLite (the HF Space fallback)
+    it degrades to a plain ``Text`` column holding the WKT string. Crucially it
+    is NOT a ``Geometry`` instance on the SQLite dialect, so GeoAlchemy's
+    RecoverGeometryColumn DDL listener skips it and ``create_all`` succeeds.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, geometry_type="POINT", srid=4326, **kw):
+        self.geometry_type = geometry_type
+        self.srid = srid
+        super().__init__()
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return _GeoAlchemyGeometry(geometry_type=self.geometry_type, srid=self.srid)
+        return Text()
 
 
 class CommunityQuestion(Base):
@@ -41,7 +66,9 @@ class CommunityQuestion(Base):
     # Location
     lat = Column(Float, nullable=False)
     lon = Column(Float, nullable=False)
-    location_geom = Column(Geometry(geometry_type='POINT', srid=4326))
+    # Portable geometry: real PostGIS Geometry on Postgres, plain Text on SQLite
+    # (so create_all does not emit RecoverGeometryColumn). See _PortableGeometry.
+    location_geom = Column(_PortableGeometry(geometry_type='POINT', srid=4326))
 
     # Vector embedding for semantic search
     embedding = Column(Vector(384))  # sentence-transformers output dimension
@@ -208,7 +235,9 @@ class AgriculturalExpert(Base):
     __tablename__ = "agricultural_experts"
 
     id = Column(String(128), primary_key=True)  # Expert user ID
-    region_geom = Column(Geometry(geometry_type='POINT', srid=4326))  # PostGIS point for spatial queries
+    region_geom = Column(
+        _PortableGeometry(geometry_type='POINT', srid=4326)
+    )  # PostGIS point for spatial queries
     
     # Contact info
     name = Column(String(100), nullable=False)

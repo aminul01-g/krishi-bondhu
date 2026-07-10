@@ -27,15 +27,48 @@ try:
 except ImportError:
     QR_AVAILABLE = False
 
-# Secret for signing public-verify tokens (set in env for production).
-_TRACE_SECRET = os.getenv("TRACE_SIGNING_SECRET", "dev-insecure-trace-secret")
 # Base URL a scanned QR should resolve to (a real verify page in production).
 _TRACE_BASE = os.getenv("TRACE_VERIFY_BASE", "https://kb.example.org/trace")
+
+# QR image directory — built as an ABSOLUTE path rooted at the project's
+# `backend/` dir (not cwd), so QR files are written reliably regardless of
+# the process working directory.
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))      # .../backend/app/services
+_BASE_DIR = os.path.dirname(os.path.dirname(_THIS_DIR))      # .../backend
+_QR_DIR = os.path.join(_BASE_DIR, "app", "static", "qrs")
+
+# Whether we are running in DEBUG mode (warn instead of refusing).
+_DEBUG = (os.getenv("DEBUG") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _resolve_secret() -> str:
+    """Return the configured trace signing secret, or refuse to sign in production.
+
+    `TRACE_SIGNING_SECRET` MUST be set in production. If it is unset:
+      * in DEBUG mode we fall back to an insecure dev default but warn loudly;
+      * otherwise we refuse to sign (fail fast) so QR tokens are never forgeable.
+    """
+    secret = os.getenv("TRACE_SIGNING_SECRET")
+    if secret:
+        return secret
+    if _DEBUG:
+        logger = __import__("logging").getLogger("TraceabilityService")
+        logger.warning(
+            "TRACE_SIGNING_SECRET is not set — using an INSECURE development "
+            "default. Scanned QR tokens are forgeable. Set TRACE_SIGNING_SECRET "
+            "before deploying."
+        )
+        return "dev-insecure-trace-secret"
+    raise RuntimeError(
+        "TRACE_SIGNING_SECRET is not configured. Refusing to sign traceability "
+        "tokens with an insecure default. Set TRACE_SIGNING_SECRET to a strong "
+        "secret before running outside DEBUG mode."
+    )
 
 
 def _hmac(batch_id: str, current_hash: str) -> str:
     return hmac.new(
-        _TRACE_SECRET.encode(), f"{batch_id}:{current_hash}".encode(),
+        _resolve_secret().encode(), f"{batch_id}:{current_hash}".encode(),
         hashlib.sha256,
     ).hexdigest()
 
@@ -108,7 +141,7 @@ async def register_harvest_batch(
         try:
             img = qrcode.make(build_trace_url(batch.id, current_hash))
             qr_filename = f"qr_{current_hash[:12]}.png"
-            qr_path = f"backend/app/static/qrs/{qr_filename}"
+            qr_path = os.path.join(_QR_DIR, qr_filename)
             os.makedirs(os.path.dirname(qr_path), exist_ok=True)
             img.save(qr_path)
             qr_url = f"/static/qrs/{qr_filename}"

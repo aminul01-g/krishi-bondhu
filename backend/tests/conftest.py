@@ -111,11 +111,18 @@ def test_client(db_session):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.db import get_db
+    from app.core.dependencies import get_current_user
+    from app.models.db_models import User
 
     async def override_get_db():
         yield db_session
 
+    def override_get_current_user():
+        # Simulate an authenticated farmer for endpoint tests.
+        return User(id=1, username="test_user", external_id="test_user")
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()

@@ -266,8 +266,20 @@ export const postSubsidySchemes = (crop, landSize) =>
 export const getCreditReport = (signal) =>
   request('GET', '/api/finance/credit-report', { signal });
 
-export const postInsuranceQuote = (crop, landSize) =>
-  request('POST', '/api/finance/insurance-quote', { body: { crop, land_size: landSize } });
+export const postInsuranceQuote = (
+  crop,
+  landSize,
+  regionRisk = 'moderate',
+  historicalLossRatio = 0,
+) =>
+  request('POST', '/api/finance/insurance-quote', {
+    body: {
+      crop,
+      land_size: landSize,
+      region_risk: regionRisk,
+      historical_loss_ratio: historicalLossRatio,
+    },
+  });
 
 export const postSimulatePayout = (crop, landSize, scenario = 'drought', severity = 0.5, regionRisk = 'moderate') =>
   request('POST', '/api/finance/simulate-payout', {
@@ -396,11 +408,17 @@ export const verifyBatch = (batch, h, t, signal) => {
 };
 
 // --- Sustainability ---
+// The backend returns these GETs as `{ status, data }` (scorecard, carbon-footprint)
+// or `{ status, score, opportunities }` (opportunities). Unwrap the usable payload
+// here so the page can read top-level fields like `scorecard.grade` / `footprint.total_emissions_kg`
+// and treat opportunities as a plain array.
 export const getSustainabilityScore = (signal) =>
-  request('GET', '/api/sustainability/scorecard', { signal });
-
-export const getSustainabilityOpportunities = (signal) =>
-  request('GET', '/api/sustainability/opportunities', { signal });
+  request('GET', '/api/sustainability/scorecard', { signal }).then((r) => r.data);
 
 export const getCarbonFootprint = (signal) =>
-  request('GET', '/api/sustainability/carbon-footprint', { signal });
+  request('GET', '/api/sustainability/carbon-footprint', { signal }).then((r) => r.data);
+
+export const getSustainabilityOpportunities = (signal) =>
+  request('GET', '/api/sustainability/opportunities', { signal }).then((r) =>
+    Array.isArray(r.opportunities) ? r.opportunities : []
+  );

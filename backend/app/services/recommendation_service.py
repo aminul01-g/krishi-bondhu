@@ -168,14 +168,17 @@ class RecommendationService:
             narrative = "No urgent actions — your farm signals look healthy. Keep monitoring."
         narrative = _maybe_localize(narrative, language)
 
+        _forecast = (market or {}).get("price_forecast") or []
+        _last_forecast = _forecast[-1] if _forecast else {}
         data_snapshot = {
             "crop": crop,
             "soil_ph": ph,
             "water_status": water.get("status") if water else None,
             "pest_high": any(r["level"] == "High" for r in (pest_risks or [])),
-            "market_trend_up": bool(market and market.get("price_forecast")
-                                    and market["price_forecast"][-1].get("high", 0)
-                                    > (market.get("current_price") or 0) * 1.05),
+            "market_trend_up": bool(
+                _last_forecast.get("high", 0)
+                > (market or {}).get("current_price", 0) * 1.05
+            ),
         }
 
         return {

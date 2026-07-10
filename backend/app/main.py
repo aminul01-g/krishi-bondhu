@@ -56,6 +56,7 @@ from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
 from app.core.dependencies import get_current_user
 import app.models  # Register all ORM models before startup actions
+import app.services.alert_service  # noqa: F401  (registers the Alert ORM model)
 
 from app.core.logging import get_logger
 from app.core.exceptions import KrishiBondhuException, KrishiBondhuClientException, KrishiBondhuServerException
@@ -307,6 +308,21 @@ async def create_database_tables():
                 )
     except Exception as e:
         logger.error("Database initialization failed", error=str(e))
+
+
+@app.on_event("startup")
+async def seed_verified_product_registry():
+    """Populate the marketplace product-verification registry on boot (idempotent).
+
+    The `/scan` endpoint can only confirm a genuine product when the
+    `VerifiedProduct` registry contains entries. This guarded seed runs once and
+    never duplicates existing rows; failures are swallowed so boot never blocks.
+    """
+    try:
+        from app.seed.phase3_seed import ensure_verified_products
+        await ensure_verified_products()
+    except Exception as e:
+        logger.warning("VerifiedProduct registry seed hook failed", error=str(e))
 
 app.include_router(api_routes.router, prefix="/api")
 app.include_router(auth_routes.router, prefix="/api/auth", tags=["auth"])

@@ -4,6 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 from datetime import datetime
 import uuid
+import logging
+
+from geoalchemy2.elements import WKTElement
+
+logger = logging.getLogger(__name__)
 
 from app.models.emergency_models import (
     InsuranceProvider,
@@ -11,6 +16,37 @@ from app.models.emergency_models import (
     ReportImage,
     HelplineCallLog,
 )
+from app.services.geospatial_service import find_nearest_experts
+
+
+def _is_sqlite(session) -> bool:
+    """True if this session's underlying dialect is SQLite."""
+    try:
+        bind = getattr(session, "bind", None)
+        return bind is not None and bind.dialect.name == "sqlite"
+    except Exception:
+        return False
+
+
+def _derive_severity(damage_estimate_percent: float, yield_loss_estimate_percent: float) -> str:
+    """Triage the worst-case severity from the caller-supplied damage/yield-loss
+    percentages. Thresholds:
+
+        >= 70%  -> critical
+        >= 40%  -> high
+        >  0%   -> medium
+        == 0%   -> low
+
+    We take the max of the two inputs so a single severe axis still escalates.
+    """
+    worst = max(damage_estimate_percent or 0.0, yield_loss_estimate_percent or 0.0)
+    if worst >= 70:
+        return "critical"
+    if worst >= 40:
+        return "high"
+    if worst > 0:
+        return "medium"
+    return "low"
 
 
 async def list_insurance_providers(session: AsyncSession) -> List[dict]:
@@ -51,10 +87,17 @@ async def create_damage_report(
         growth_stage=growth_stage,
         location_lat=lat,
         location_lon=lon,
-        location_geom=f"POINT({lon} {lat})",
+        # On Postgres, bind a real WKTElement so it binds correctly to the
+        # PostGIS Geometry column; on the SQLite fallback the column is a plain
+        # Text column, so we store the WKT as text.
+        location_geom=(
+            f"POINT({lon} {lat})" if _is_sqlite(session)
+            else WKTElement(f"POINT({lon} {lat})", srid=4326)
+        ),
         damage_cause=damage_cause,
         damage_estimate_percent=damage_estimate_percent,
         yield_loss_estimate_percent=yield_loss_estimate_percent,
+        severity=_derive_severity(damage_estimate_percent, yield_loss_estimate_percent),
         insurance_provider_id=insurance_provider_id,
         voice_statement_transcribed=voice_statement_transcribed,
     )
@@ -102,6 +145,7 @@ async def get_damage_report(session: AsyncSession, report_id: str) -> Optional[d
         "damage_cause": report.damage_cause,
         "damage_estimate_percent": report.damage_estimate_percent,
         "yield_loss_estimate_percent": report.yield_loss_estimate_percent,
+        "severity": getattr(report, "severity", None),
         "status": report.status,
         "insurance_claim_id": report.insurance_claim_id,
         "pdf_url": report.pdf_url,
@@ -188,4 +232,15 @@ async def log_helpline_call(
     session.add(log)
     await session.commit()
     await session.refresh(log)
+
+    # Best-effort: attach the nearest responders so the operator has a call list
+    # immediately. Never let a geo lookup failure break logging the call itself.
+    if lat is not None and lon is not None:
+        try:
+            responders = await find_nearest_experts(session, lat, lon, limit=3)
+            log.nearest_responders = responders
+        except Exception as e:  # pragma: no cover - best effort
+            logger.warning("Could not attach nearest responders to helpline log: %s", e)
+            log.nearest_responders = []
+
     return log

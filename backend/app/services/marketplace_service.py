@@ -176,8 +176,11 @@ async def scan_product(
         text = extract_text_from_base64(image_base64)
         parsed = parse_label_text(text)
         if parsed.get("product_name"):
-            verification_result = "MATCH_FOUND"
-            confidence_score = 0.55
+            # OCR only read a label; this is NOT a confirmed registry match.
+            # Report it honestly as an unverified label read, never as a
+            # verified/positive match, and keep the confidence low.
+            verification_result = "LABEL_READ"
+            confidence_score = 0.35
         else:
             verification_result = "UNREGISTERED"
             confidence_score = 0.35

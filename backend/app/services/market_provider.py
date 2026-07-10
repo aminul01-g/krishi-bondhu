@@ -30,10 +30,14 @@ from typing import Dict, List, Optional
 logger = logging.getLogger("MarketProvider")
 
 # Live Bangladesh DAM (Dept. of Agricultural Marketing) feed configuration.
-# Production note: outbound network access is required, and a DAM_API_BASE must
-# point at the real DAM/AgMarkNet-style endpoint. Leave unconfigured in dev to
-# transparently fall back to the calibrated simulation.
-DAM_API_BASE = os.getenv("DAM_API_BASE", "https://dam.gov.bd/api/v1/prices")
+# NOTE: Bangladesh DAM has no public JSON API. The default below is intentionally
+# EMPTY so the adapter transparently falls back to the honest `simulated` series
+# rather than hitting a placeholder URL and mislabeling provenance. To enable a
+# real feed, set DAM_API_BASE (and DAM_API_KEY) to a real gateway endpoint —
+# fetch_dam_prices() will then attempt it and still fall back to simulation on
+# any failure. Do NOT set a non-functional placeholder here; it only adds latency
+# and obscures the fact that data is simulated.
+DAM_API_BASE = os.getenv("DAM_API_BASE", "")
 DAM_API_KEY = os.getenv("DAM_API_KEY", "")
 
 # Major Bangladesh wholesale markets with approximate coordinates.
