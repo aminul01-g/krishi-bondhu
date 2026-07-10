@@ -21,6 +21,15 @@ class SubsidyRequest(BaseModel):
 class InsuranceQuoteRequest(BaseModel):
     crop: str = Field(..., min_length=1, description="Name of the crop")
     land_size: float = Field(..., gt=0)
+    region_risk: str = Field("moderate", description="Region climate-risk class: low | moderate | high")
+    historical_loss_ratio: float = Field(0.0, description="Farmer's historical loss ratio (0..1+)")
+
+class SimulatePayoutRequest(BaseModel):
+    crop: str = Field(..., min_length=1, description="Name of the crop")
+    land_size: float = Field(..., gt=0)
+    scenario: str = Field("drought", description="Weather peril scenario: drought | flood | storm")
+    severity: float = Field(0.5, ge=0.0, le=1.0, description="Severity fraction of the triggered peril (0..1)")
+    region_risk: str = Field("moderate", description="Region climate-risk class: low | moderate | high")
 
 @router.post("/schemes", response_model=dict)
 async def get_subsidy_schemes(
@@ -91,29 +100,39 @@ async def get_insurance_quote(
             logger.warning(f"Insurance quote requested without valid crop by user {user_id}")
             raise HTTPException(status_code=400, detail="The 'crop' field is required.")
 
-        # Get the structured quote from service
-        quote_data = finance_service.get_insurance_quote(request.crop, request.land_size)
-
-        # Use FinancialPlanningCrew to explain the quote in a supportive way
-        from crewai import Task
-        from app.agents.finance_advisor import finance_advisor
-
-        insurance_task = Task(
-            description=f"Explain this insurance quote to the farmer: {quote_data}. Emphasize the payout triggers for {request.crop}.",
-            expected_output="A friendly explanation of the premium, coverage, and specific disaster triggers in Bengali/English.",
-            agent=finance_advisor
+        # Get the structured quote from service (synchronous — do NOT await)
+        quote_data = finance_service.get_insurance_quote(
+            request.crop,
+            request.land_size,
+            region_risk=request.region_risk,
+            historical_loss_ratio=request.historical_loss_ratio,
         )
 
-        crew_obj = FinancialPlanningCrew()
-        crew = crew_obj.create_crew(tasks=[insurance_task])
+        # Use FinancialPlanningCrew to explain the quote in a supportive way
+        advice = ""
+        try:
+            from crewai import Task
+            from app.agents.finance_advisor import finance_advisor
 
-        inputs = {
-            "user_input": f"I want an insurance quote for {request.crop} on {request.land_size} decimals.",
-            "user_id": user_id
-        }
+            insurance_task = Task(
+                description=f"Explain this insurance quote to the farmer: {quote_data}. Emphasize the payout triggers for {request.crop}.",
+                expected_output="A friendly explanation of the premium, coverage, and specific disaster triggers in Bengali/English.",
+                agent=finance_advisor
+            )
 
-        result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
-        advice = str(result)
+            crew_obj = FinancialPlanningCrew()
+            crew = crew_obj.create_crew(tasks=[insurance_task])
+
+            inputs = {
+                "user_input": f"I want an insurance quote for {request.crop} on {request.land_size} decimals.",
+                "user_id": user_id
+            }
+
+            result = await asyncio.to_thread(crew.kickoff, inputs=inputs)
+            advice = str(result)
+        except Exception as e:
+            logger.warning(f"Insurance quote explanation failed (returning raw quote): {e}")
+            advice = "প্রিমিয়াম, কভারেজ এবং দুর্যোগ ট্রিগার বিস্তারিত জানতে আপনার এজেন্টের সাথে যোগাযোগ করুন।"
 
         # Log quote to DB
         quote_record = InsuranceQuote(
@@ -124,7 +143,49 @@ async def get_insurance_quote(
         session.add(quote_record)
         await session.commit()
 
-        return {"quote": advice}
+        return {"quote": advice, "details": quote_data}
+    except Exception as e:
+        logger.error(f"Insurance quote failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/simulate-payout")
+async def simulate_payout(
+    request: SimulatePayoutRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Estimate the weather-indexed insurance payout for a given scenario/severity.
+    `simulate_payout` is a synchronous method — call it directly, do NOT await.
+    """
+    try:
+        payout = finance_service.simulate_payout(
+            request.crop,
+            request.land_size,
+            scenario=request.scenario,
+            severity=request.severity,
+            region_risk=request.region_risk,
+        )
+        return {"status": "success", "data": payout}
+    except Exception as e:
+        logger.error(f"Payout simulation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/subsidies")
+async def get_subsidies(
+    current_user: User = Depends(get_current_user),
+    crop: str = "All",
+    land_size: float = 0.0
+):
+    """
+    Returns structured government subsidy eligibility from FinanceService
+    (synchronous `get_eligible_subsidies`).
+    """
+    try:
+        schemes = finance_service.get_eligible_subsidies(crop, land_size)
+        return {"status": "success", "crop": crop, "land_size": land_size, "subsidies": schemes}
+    except Exception as e:
+        logger.error(f"Subsidy fetch failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Insurance quote failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

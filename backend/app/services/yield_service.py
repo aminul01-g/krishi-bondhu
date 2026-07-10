@@ -61,19 +61,34 @@ MODEL_WEIGHTS = {
 
 async def get_satellite_ndvi(lat: float, lon: float, season: str = "current") -> float:
     """
-    Fetches the Normalized Difference Vegetation Index (NDVI) for a location.
-    NDVI ranges from -1 to 1. 0.6 to 0.9 indicates healthy green vegetation.
+    Vegetation index for a location.
+
+    No live GEE/Sentinel feed is configured in this environment, so we return an
+    *estimated* NDVI derived from current weather (a greenness proxy) and flag it
+    via NDVI_ESTIMATED / the prediction's `ndvi_estimated` field. Replace the body
+    with a real GEE/Sentinel-Hub fetch when a feed is wired — the rest of the
+    pipeline (yield model, season plan) consumes the same contract.
     """
-    # Integration point for Google Earth Engine (GEE) or Sentinel-Hub
-    # For this implementation, we simulate a high-fidelity NDVI value based on coordinates
-    # to ensure the ML model has a realistic input.
+    try:
+        from app.services.weather_service import WeatherService
 
-    # Deterministic mock based on coordinates to ensure consistency for the same plot
-    seed = int(abs(lat * 1000) + abs(lon * 1000))
-    random.seed(seed)
+        svc = WeatherService()
+        w = await svc.get_weather_data(lat, lon)
+        rain = float(w.get("rainfall_mm", 50.0))
+        tmean = float(w.get("temp_mean", 28.0))
+    except Exception:
+        rain, tmean = 50.0, 28.0
 
-    # Typical NDVI for agricultural land in Bangladesh ranges from 0.3 to 0.85
-    return random.uniform(0.3, 0.85)
+    # Greenness proxy: more rainfall and moderate temperature -> higher index.
+    rain_term = min(1.0, rain / 200.0)  # saturates around 200 mm
+    temp_term = max(0.0, 1.0 - abs(tmean - 27.0) / 15.0)
+    est = 0.35 + 0.45 * (0.7 * rain_term + 0.3 * temp_term)  # ~0.35..0.80
+    est = max(0.2, min(0.9, est))
+    return round(est, 3)
+
+
+# True when get_satellite_ndvi is estimating rather than returning real satellite data.
+NDVI_ESTIMATED = True
 
 
 async def _get_weather_features(lat: float, lon: float) -> Dict[str, float]:
@@ -173,6 +188,7 @@ async def predict_yield(
         "predicted_yield": round(predicted_val, 2),
         "unit": "tons/bigha",
         "ndvi": round(ndvi, 3),
+        "ndvi_estimated": NDVI_ESTIMATED,
         "confidence": round(confidence, 2),
         "historical_avg": round(avg_historical_yield, 2),
         "prediction_source": prediction_source,

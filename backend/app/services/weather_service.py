@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import math
 import httpx
 import numpy as np
 from datetime import datetime, timedelta
@@ -211,6 +212,36 @@ class WeatherService:
         et0 = 0.0023 * (t_mean + 17.8) * ((t_max - t_min) ** 0.5) * ra
         return round(et0, 2)
 
+    @staticmethod
+    def calculate_extraterrestrial_radiation(lat: float, day_of_year: int) -> float:
+        """
+        Extraterrestrial radiation Ra (mm/day) via the FAO-56 equation.
+
+        The Hargreaves-Samani ET0 uses Ra — radiation at the *top of the
+        atmosphere* — NOT surface solar radiation. The previous code fed
+        `solar_radiation` (surface insolation) in as Ra, which understates ET0.
+        This computes the correct astronomical Ra from latitude + day-of-year.
+
+        Returns Ra in mm/day (the unit the 0.0023 coefficient expects).
+        """
+        phi = math.radians(lat)
+        decl = 0.409 * math.sin((2 * math.pi / 365) * day_of_year - 1.39)
+        dr = 1 + 0.033 * math.cos((2 * math.pi / 365) * day_of_year)
+        tan_phi_tan_decl = (math.tan(phi) ** 2) * (math.tan(decl) ** 2)
+        if tan_phi_tan_decl >= 1:
+            ws = math.pi / 2  # polar day/threshold guard
+        else:
+            ws = math.acos(-math.tan(phi) * math.tan(decl))
+
+        # Ra in MJ/m²/day, then convert to mm/day (latent heat ≈ 2.45 MJ/kg)
+        g_sc = 0.0820  # solar constant, MJ/m²/min
+        ra_mj = (24 * 60 / math.pi) * g_sc * dr * (
+            ws * math.sin(phi) * math.sin(decl)
+            + math.cos(phi) * math.cos(decl) * math.sin(ws)
+        )
+        ra_mm = ra_mj / 2.45
+        return round(max(ra_mm, 0.0), 2)
+
     # ------------------------------------------------------------------
     # Full soil water balance
     # ------------------------------------------------------------------
@@ -236,8 +267,12 @@ class WeatherService:
         previous_depletion_mm : float — Carry-over depletion from previous day (default 0).
         """
         weather = await self.get_weather_data(lat, lon)
-        ra = weather.get("solar_radiation", 15.0)
-        
+
+        # Extraterrestrial radiation Ra from latitude + day-of-year (FAO-56),
+        # not surface insolation. This corrects the ET0 input.
+        day_of_year = datetime.now().timetuple().tm_yday
+        ra = self.calculate_extraterrestrial_radiation(lat, day_of_year)
+
         # Robust fallbacks for missing weather data
         t_max = weather.get("temp_max", 30.0)
         t_min = weather.get("temp_min", 20.0)

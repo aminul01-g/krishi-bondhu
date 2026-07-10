@@ -9,7 +9,8 @@ from app.core.dependencies import get_current_user
 from app.models.db_models import User
 from app.services.sustainability_service import (
     get_sustainability_scorecard,
-    get_carbon_market_opportunities
+    calculate_carbon_footprint,
+    get_carbon_market_opportunities,
 )
 from app.crews.krishi_crew import HealthAndSoilCrew
 from app.agents.sustainability_coach import sustainability_coach
@@ -34,6 +35,24 @@ async def get_scorecard(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to calculate scorecard: {str(e)}")
 
+@router.get("/carbon-footprint")
+async def get_carbon_footprint(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Estimates the farmer's carbon footprint from parsed diary inputs using
+    IPCC Tier-1 emission factors (async, deterministic).
+    """
+    try:
+        footprint = await calculate_carbon_footprint(db, current_user.external_id)
+        return {
+            "status": "success",
+            "data": footprint
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to calculate carbon footprint: {str(e)}")
+
 @router.get("/opportunities")
 async def get_opportunities(
     current_user: User = Depends(get_current_user),
@@ -57,7 +76,7 @@ async def get_opportunities(
         else:
             score = metric.carbon_score
 
-        opportunities = await get_carbon_market_opportunities(score, "Bangladesh")
+        opportunities = get_carbon_market_opportunities(score, "Bangladesh")
 
         return {
             "status": "success",

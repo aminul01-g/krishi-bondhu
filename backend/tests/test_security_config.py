@@ -102,7 +102,8 @@ def test_default_secret_refused_in_production():
 
 def test_default_secret_allowed_in_dev():
     mod = _fresh_security({"DEBUG": "true"})  # default secret tolerated in dev
-    assert mod.SECRET_KEY == mod.DEFAULT_SECRET_KEY
+    from app.core.config import DEFAULT_SECRET_KEY
+    assert mod.SECRET_KEY == DEFAULT_SECRET_KEY
 
 
 def test_real_secret_boots_in_production():

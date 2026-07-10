@@ -1,140 +1,160 @@
+"""Traceability service (Phase 2 — Domain depth).
+
+Improvements over the old placeholder:
+  * Hash chain links batches (prev_hash -> current_hash) for tamper evidence.
+  * The QR encodes a *real, verifiable* URL carrying an HMAC-signed token, so
+    scanning it opens a verification page instead of a mock placeholder.
+  * `verify_batch_token` allows stateless public verification of a scan.
+  * Hash payload excludes volatile timestamps so re-verification is stable.
+"""
+from __future__ import annotations
+
 import hashlib
-import uuid
+import hmac
 import os
-import base64
+import uuid
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+
 from app.models.production_models import HarvestBatch
 
-# For QR generation, we use a mock implementation if the library isn't available
-# to ensure the agent doesn't crash during deployment.
 try:
     import qrcode
-    from PIL import Image
     QR_AVAILABLE = True
 except ImportError:
     QR_AVAILABLE = False
 
-async def generate_batch_hash(prev_hash: Optional[str], data: Dict[str, Any]) -> str:
+# Secret for signing public-verify tokens (set in env for production).
+_TRACE_SECRET = os.getenv("TRACE_SIGNING_SECRET", "dev-insecure-trace-secret")
+# Base URL a scanned QR should resolve to (a real verify page in production).
+_TRACE_BASE = os.getenv("TRACE_VERIFY_BASE", "https://kb.example.org/trace")
+
+
+def _hmac(batch_id: str, current_hash: str) -> str:
+    return hmac.new(
+        _TRACE_SECRET.encode(), f"{batch_id}:{current_hash}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def sign_batch_token(batch_id: str, current_hash: str) -> str:
+    """Stateless HMAC token proving a QR belongs to a given batch hash."""
+    return _hmac(batch_id, current_hash)
+
+
+def verify_batch_token(batch_id: str, token: str, current_hash: str) -> bool:
+    """Verify a scan token against the batch's recorded hash."""
+    expected = _hmac(batch_id, current_hash)
+    return hmac.compare_digest(expected, token)
+
+
+def build_trace_url(batch_id: str, current_hash: str) -> str:
+    """A real, verifiable URL encoded into the QR code."""
+    return f"{_TRACE_BASE}?batch={batch_id}&h={current_hash}&t={sign_batch_token(batch_id, current_hash)}"
+
+
+def generate_batch_hash(prev_hash: Optional[str], data: Dict[str, Any]) -> str:
     """
-    Creates a SHA-256 hash of the current batch data and the previous hash,
-    forming a cryptographically linked chain.
+    SHA-256 over the batch's stable fields + previous hash, forming a linked chain.
+    Timestamps are excluded so re-verification is deterministic.
     """
-    # Sort keys to ensure consistent hashing
-    sorted_data = sorted(data.items())
-    data_string = str(sorted_data)
-    combined = f"{prev_hash or 'GENESIS'}:{data_string}"
+    payload = {
+        "user_id": data.get("user_id"),
+        "crop": data.get("crop"),
+        "quantity": data.get("quantity"),
+        "inputs": data.get("inputs"),
+    }
+    sorted_data = sorted(payload.items())
+    combined = f"{prev_hash or 'GENESIS'}:{sorted_data}"
     return hashlib.sha256(combined.encode()).hexdigest()
+
 
 async def register_harvest_batch(
     db: AsyncSession,
     user_id: str,
     crop: str,
     quantity: float,
-    inputs_used: List[str]
+    inputs_used: List[str],
+    unit: str = "kg",
 ) -> Dict[str, Any]:
-    """
-    Registers a new harvest batch into the immutable ledger.
-    """
-    # 1. Get the most recent batch hash to link the chain
+    """Registers a harvest batch into the immutable, verifiable ledger."""
     stmt = select(HarvestBatch).order_by(desc(HarvestBatch.created_at)).limit(1)
-    result = await db.execute(stmt)
-    last_batch = result.scalars().first()
+    last_batch = (await db.execute(stmt)).scalars().first()
     prev_hash = last_batch.current_hash if last_batch else None
 
-    # 2. Define batch data for hashing
-    batch_data = {
-        "user_id": user_id,
-        "crop": crop,
-        "quantity": quantity,
-        "inputs": inputs_used,
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    batch_data = {"user_id": user_id, "crop": crop, "quantity": quantity, "inputs": inputs_used}
+    current_hash = generate_batch_hash(prev_hash, batch_data)
 
-    # 3. Generate current hash
-    current_hash = await generate_batch_hash(prev_hash, batch_data)
-
-    # 4. Generate QR Code URL
-    qr_url = None
-    if QR_AVAILABLE:
-        qr_val = f"kb-trace://batch/{uuid.uuid4()}" # Simplified trace link
-        img = qrcode.make(qr_val)
-        # In production, this would be uploaded to S3/Cloudinary
-        # For now, we save to local storage
-        qr_filename = f"qr_{current_hash[:12]}.png"
-        qr_path = f"backend/app/static/qrs/{qr_filename}"
-        os.makedirs(os.path.dirname(qr_path), exist_ok=True)
-        img.save(qr_path)
-        qr_url = f"/static/qrs/{qr_filename}"
-    else:
-        qr_url = "http://mock-qr-service.com/placeholder.png"
-
-    # 5. Persist to DB
     batch = HarvestBatch(
         user_id=user_id,
         crop=crop,
         quantity=quantity,
+        unit=unit,
         inputs_used=inputs_used,
         prev_hash=prev_hash,
         current_hash=current_hash,
-        qr_code_url=qr_url
+        certification_status="unverified",
     )
     db.add(batch)
+    await db.commit()
+    await db.refresh(batch)
+
+    # Encode a REAL verifiable URL into the QR (not a placeholder).
+    qr_url = None
+    if QR_AVAILABLE:
+        try:
+            img = qrcode.make(build_trace_url(batch.id, current_hash))
+            qr_filename = f"qr_{current_hash[:12]}.png"
+            qr_path = f"backend/app/static/qrs/{qr_filename}"
+            os.makedirs(os.path.dirname(qr_path), exist_ok=True)
+            img.save(qr_path)
+            qr_url = f"/static/qrs/{qr_filename}"
+        except Exception as e:
+            logger = __import__("logging").getLogger("TraceabilityService")
+            logger.warning("QR generation failed", error=str(e))
+            qr_url = build_trace_url(batch.id, current_hash)
+    else:
+        qr_url = build_trace_url(batch.id, current_hash)
+
+    batch.qr_code_url = qr_url
     await db.commit()
     await db.refresh(batch)
 
     return {
         "batch_id": batch.id,
         "current_hash": batch.current_hash,
-        "qr_url": batch.qr_code_url
+        "prev_hash": prev_hash,
+        "qr_url": batch.qr_code_url,
+        "verify_url": build_trace_url(batch.id, current_hash),
+        "trace_token": sign_batch_token(batch.id, current_hash),
     }
 
-async def verify_batch_integrity(db: AsyncSession, batch_id: str) -> Dict[str, Any]:
-    """
-    Verifies that the batch has not been tampered with by re-calculating the hash chain.
-    """
-    stmt = select(HarvestBatch).where(HarvestBatch.id == batch_id)
-    result = await db.execute(stmt)
-    batch = result.scalars().first()
 
+async def verify_batch_integrity(db: AsyncSession, batch_id: str) -> Dict[str, Any]:
+    """Recomputes the hash chain for a batch to detect tampering."""
+    stmt = select(HarvestBatch).where(HarvestBatch.id == batch_id)
+    batch = (await db.execute(stmt)).scalars().first()
     if not batch:
         return {"verified": False, "error": "Batch not found"}
 
-    # Re-calculate hash based on stored data
-    batch_data = {
-        "user_id": batch.user_id,
-        "crop": batch.crop,
-        "quantity": batch.quantity,
-        "inputs": batch.inputs_used,
-        "timestamp": batch.created_at.isoformat() # Note: Potential drift if not handled carefully
-    }
-
-    recalculated = await generate_batch_hash(batch.prev_hash, batch_data)
-
-    # In a real system, we'd tolerate slight timestamp drifts or use a fixed snap
+    batch_data = {"user_id": batch.user_id, "crop": batch.crop,
+                  "quantity": batch.quantity, "inputs": batch.inputs_used}
+    recalculated = generate_batch_hash(batch.prev_hash, batch_data)
     if recalculated == batch.current_hash:
-        return {"verified": True}
-
+        return {"verified": True, "trace_token": sign_batch_token(batch.id, batch.current_hash)}
     return {"verified": False, "error": "Hash mismatch: Data may have been tampered with"}
 
+
 async def find_premium_buyers(crop: str, quantity: float) -> List[Dict[str, Any]]:
-    """
-    Matches harvest to a curated directory of high-value buyers.
-    """
-    # Mock directory of premium buyers
+    """Matches harvest to a curated directory of high-value buyers."""
     buyers_directory = [
         {"name": "Dhaka Organic Retail", "crop": "rice", "min_qty": 100, "type": "Retail Chain", "premium": "15%"},
         {"name": "Bengal Export Ltd", "crop": "mango", "min_qty": 500, "type": "Exporter", "premium": "25%"},
         {"name": "Green Agro Processors", "crop": "potato", "min_qty": 200, "type": "Processor", "premium": "10%"},
         {"name": "Pure Farm Co.", "crop": "rice", "min_qty": 50, "type": "Boutique", "premium": "20%"},
     ]
-
     crop_lower = crop.lower()
-    matches = [
-        b for b in buyers_directory
-        if b["crop"] == crop_lower and quantity >= b["min_qty"]
-    ]
-
-    return matches
+    return [b for b in buyers_directory if b["crop"] == crop_lower and quantity >= b["min_qty"]]

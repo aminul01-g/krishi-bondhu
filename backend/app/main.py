@@ -9,10 +9,21 @@ import uuid
 import asyncio
 import traceback
 from dotenv import load_dotenv
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+
+# ``slowapi`` is an OPTIONAL dependency. When it is not installed (e.g. a
+# minimal/offline environment) rate limiting degrades to a no-op and the app
+# still imports and runs. The real handler/middleware are only wired up when
+# the package is present (see the rate-limiting block below).
+try:
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+    from slowapi import _rate_limit_exceeded_handler
+    _HAVE_SLOWAPI = True
+except ImportError:  # pragma: no cover - exercised only without slowapi
+    RateLimitExceeded = None
+    SlowAPIMiddleware = None
+    _rate_limit_exceeded_handler = None
+    _HAVE_SLOWAPI = False
 
 # Load environment variables before importing LLM/agent modules.
 load_dotenv()
@@ -40,6 +51,7 @@ from app.api.endpoints import dashboard as dashboard_routes
 from app.services.task_worker import task_worker_loop
 from app.services.memory import MemoryService
 from app.api.endpoints import memory as memory_routes
+from app.api.endpoints import chat_stream as chat_stream_routes
 from app.db import get_db, engine, DATABASE_URL, AsyncSessionLocal
 from app.models.db_models import Base, User, Conversation, IrrigationLog
 from app.core.dependencies import get_current_user
@@ -47,7 +59,13 @@ import app.models  # Register all ORM models before startup actions
 
 from app.core.logging import get_logger
 from app.core.exceptions import KrishiBondhuException, KrishiBondhuClientException, KrishiBondhuServerException
-import structlog
+
+# ``structlog`` is an OPTIONAL dependency. Fall back to stdlib logging behavior
+# (no structured contextvars binding) when it is not installed.
+try:
+    import structlog
+except ImportError:  # pragma: no cover - exercised only without structlog
+    structlog = None
 
 logger = get_logger("main")
 
@@ -60,10 +78,14 @@ app = FastAPI(title="KrishiBondhu API")
 # EVERY route; hot/sensitive endpoints keep stricter @limiter.limit overrides.
 from app.core.rate_limit import limiter, DEFAULT_LIMITS
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Only wire up slowapi's exception handler + enforcement middleware when the
+# package is actually available. Without slowapi, @limiter.limit decorators
+# used on the routes are no-ops (see app.core.rate_limit._NullLimiter).
+if _HAVE_SLOWAPI and RateLimitExceeded is not None and _rate_limit_exceeded_handler is not None:
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # SlowAPIMiddleware is what actually enforces the global default_limits across
 # all routes (per-route decorators work without it, but defaults do not).
-if DEFAULT_LIMITS:
+if _HAVE_SLOWAPI and SlowAPIMiddleware is not None and DEFAULT_LIMITS:
     app.add_middleware(SlowAPIMiddleware)
 
 # --- Global Error Handling ---
@@ -102,12 +124,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     request_id = str(uuid.uuid4())
-    structlog.contextvars.bind_contextvars(request_id=request_id)
+    # Only bind request context into structlog when it is installed; otherwise
+    # this is a harmless no-op.
+    if structlog is not None:
+        structlog.contextvars.bind_contextvars(request_id=request_id)
     try:
         response = await call_next(request)
         return response
     finally:
-        structlog.contextvars.clear_contextvars()
+        if structlog is not None:
+            structlog.contextvars.clear_contextvars()
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -301,6 +327,7 @@ app.include_router(traceability_routes.router, prefix="/api/traceability", tags=
 app.include_router(sustainability_routes.router, prefix="/api/sustainability", tags=["sustainability"])
 app.include_router(farmer_profile_routes.router, prefix="/api/profile", tags=["profile"])
 app.include_router(dashboard_routes.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(chat_stream_routes.router, prefix="/api", tags=["chat"])
 
 # --- APScheduler Setup ---
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -354,8 +381,14 @@ async def daily_notification_job():
             gps_by_user_id: dict = {}
             for row in latest_rows:
                 meta = row.meta_data or {}
-                if isinstance(meta, dict) and meta.get("gps"):
-                    gps_by_user_id[row.user_id] = meta["gps"]
+                gps = meta.get("gps") if isinstance(meta, dict) else None
+                # Only accept a GPS fix with real numeric coordinates. Uploads
+                # without location persist {"lat": None, "lon": None}, which is
+                # truthy but useless — skip it so the Dhaka default applies
+                # instead of calling the weather service with lat/lon = None.
+                if isinstance(gps, dict) and isinstance(gps.get("lat"), (int, float)) \
+                        and isinstance(gps.get("lon"), (int, float)):
+                    gps_by_user_id[row.user_id] = gps
 
             # --- Compute pest risk with bounded concurrency -------------------
             alert_svc = AlertService()
@@ -515,6 +548,11 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        pass
+    finally:
+        # Always deregister, even on abnormal closes (ConnectionClosedError,
+        # CancelledError on shutdown, etc.) — otherwise a dead socket lingers
+        # in the manager and permanently consumes a connection-cap slot.
         ws_manager.disconnect(websocket, user_id)
 
 @app.post('/api/upload_audio')
@@ -570,46 +608,75 @@ async def upload_audio(
 
         clean_msg = transcript.lower().strip()
         greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
-        
+        intelligence_meta: dict = {}
+
         if clean_msg in greetings:
             reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
         else:
-            route_task = Task(
-                description=(
-                    f"Process the user's message: {transcript}. "
-                    "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
-                    "You must provide the final expert advice directly to the user."
-                ),
-                expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
-                agent=bengali_interpreter
-            )
-
-            crew_obj = KrishiCrew()
-            crew = crew_obj.create_crew(tasks=[route_task])
-
-            result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
-            raw_reply = str(result)
-            
-            import json
             try:
-                data = json.loads(raw_reply)
-                if isinstance(data, dict):
-                    parts = []
-                    for k, v in data.items():
-                        parts.append(f"{str(k).replace('_', ' ').title()}: {v}")
-                    reply_text = "\n".join(parts)
-                else:
+                from app.intelligence import IntelligenceOrchestrator
+
+                orch = IntelligenceOrchestrator()
+                result = await orch.respond(
+                    db,
+                    message=transcript,
+                    user_id_int=current_user.id,
+                    external_id=current_user.external_id,
+                    gps=initial_state["gps"],
+                    history=None,
+                    language=initial_state.get("language", "bn"),
+                )
+                reply_text = result.answer
+                intelligence_meta = result.to_payload()
+            except Exception as orch_err:
+                logger.warning(
+                    "Voice intelligence orchestrator failed; falling back to crew",
+                    error=str(orch_err),
+                )
+                route_task = Task(
+                    description=(
+                        f"Process the user's message: {transcript}. "
+                        "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
+                        "You must provide the final expert advice directly to the user."
+                    ),
+                    expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
+                    agent=bengali_interpreter
+                )
+
+                crew_obj = KrishiCrew()
+                crew = crew_obj.create_crew(tasks=[route_task])
+
+                raw_reply = str(await asyncio.to_thread(crew.kickoff, inputs=initial_state))
+                try:
+                    import json as _json
+
+                    data = _json.loads(raw_reply)
+                    if isinstance(data, dict):
+                        reply_text = "\n".join(
+                            f"{str(k).replace('_', ' ').title()}: {v}" for k, v in data.items()
+                        )
+                    else:
+                        reply_text = raw_reply
+                except Exception:
                     reply_text = raw_reply
-            except Exception:
-                reply_text = raw_reply
 
         user_db_id = current_user.id
+        voice_metadata = {"gps": initial_state["gps"]}
+        if intelligence_meta:
+            voice_metadata.update(
+                {
+                    "sources": intelligence_meta.get("sources"),
+                    "tool_traces": intelligence_meta.get("tool_traces"),
+                    "confidence": intelligence_meta.get("confidence"),
+                    "simulated_data_used": intelligence_meta.get("simulated_data_used"),
+                }
+            )
         saved_conv_id = await save_conversation_to_db(
             db,
             user_db_id,
             transcript,
             reply_text,
-            metadata={"gps": initial_state["gps"]},
+            metadata=voice_metadata,
             tts_path=None,
             media_url=image_path,
             external_id=current_user.external_id,
@@ -637,7 +704,11 @@ async def upload_audio(
             "reply_text": reply_text,
             "tts_path": tts_path,
             "user_id": current_user.external_id,
-            "gps": initial_state["gps"]
+            "gps": initial_state["gps"],
+            "sources": intelligence_meta.get("sources") if intelligence_meta else None,
+            "tool_traces": intelligence_meta.get("tool_traces") if intelligence_meta else None,
+            "confidence": intelligence_meta.get("confidence") if intelligence_meta else None,
+            "simulated_data_used": intelligence_meta.get("simulated_data_used") if intelligence_meta else None,
         })
     except Exception as e:
         logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
@@ -671,9 +742,22 @@ async def upload_image(
         from app.crews.krishi_crew import KrishiCrew
         from crewai import Task
         from app.agents.disease_analyst import disease_analyst
+        from app.intelligence.farmer_context import FarmerContextAssembler
+
+        # Enrich the vision prompt with the farmer's real context.
+        try:
+            fctx = await FarmerContextAssembler.assemble(
+                db, current_user.id, current_user.external_id,
+                {"lat": lat, "lon": lon} if lat is not None else None,
+            )
+            ctx_note = f"Farmer context: {fctx.formatted}\n\n" if fctx.formatted else ""
+        except Exception:
+            ctx_note = ""
 
         vision_task = Task(
-            description=f"Analyze the soil/crop image at {image_path} and answer: {question}",
+            description=(
+                f"{ctx_note}Analyze the soil/crop image at {image_path} and answer: {question}"
+            ),
             expected_output="A technical diagnostic report with treatment recommendations.",
             agent=disease_analyst
         )
@@ -778,33 +862,65 @@ async def chat(
 
         clean_msg = message.lower().strip()
         greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
-        
+        intelligence_meta: dict = {}
+
         if clean_msg in greetings:
             reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
         else:
-            route_task = Task(
-                description=(
-                    f"Process the user's message: {message}. "
-                    "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
-                    "You must provide the final expert advice directly to the user."
-                ),
-                expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
-                agent=bengali_interpreter
-            )
+            try:
+                # Phase 0 intelligence layer: context-aware, tool-augmented, cited.
+                from app.intelligence import IntelligenceOrchestrator
 
-            crew_obj = KrishiCrew()
-            crew = crew_obj.create_crew(tasks=[route_task])
+                orch = IntelligenceOrchestrator()
+                result = await orch.respond(
+                    db,
+                    message=message,
+                    user_id_int=current_user.id,
+                    external_id=current_user.external_id,
+                    gps=initial_state["gps"],
+                    history=messages,
+                    language=detected_language,
+                )
+                reply_text = result.answer
+                intelligence_meta = result.to_payload()
+            except Exception as orch_err:
+                logger.warning(
+                    "Intelligence orchestrator failed; falling back to crew",
+                    error=str(orch_err),
+                )
+                route_task = Task(
+                    description=(
+                        f"Process the user's message: {message}. "
+                        "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
+                        "You must provide the final expert advice directly to the user."
+                    ),
+                    expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
+                    agent=bengali_interpreter
+                )
 
-            result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
-            reply_text = str(result)
+                crew_obj = KrishiCrew()
+                crew = crew_obj.create_crew(tasks=[route_task])
+
+                result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
+                reply_text = str(result)
 
         user_db_id = current_user.id
+        conv_metadata = {"gps": initial_state["gps"]}
+        if intelligence_meta:
+            conv_metadata.update(
+                {
+                    "sources": intelligence_meta.get("sources"),
+                    "tool_traces": intelligence_meta.get("tool_traces"),
+                    "confidence": intelligence_meta.get("confidence"),
+                    "simulated_data_used": intelligence_meta.get("simulated_data_used"),
+                }
+            )
         saved_conv_id = await save_conversation_to_db(
             db,
             user_db_id,
             message,
             reply_text,
-            metadata={"gps": initial_state["gps"]},
+            metadata=conv_metadata,
             media_url=image_path,
             external_id=current_user.external_id,
         )
@@ -831,136 +947,15 @@ async def chat(
             "reply_text": reply_text,
             "tts_path": tts_path,
             "user_id": current_user.external_id,
-            "gps": initial_state["gps"]
+            "gps": initial_state["gps"],
+            "sources": intelligence_meta.get("sources") if intelligence_meta else None,
+            "tool_traces": intelligence_meta.get("tool_traces") if intelligence_meta else None,
+            "confidence": intelligence_meta.get("confidence") if intelligence_meta else None,
+            "simulated_data_used": intelligence_meta.get("simulated_data_used") if intelligence_meta else None,
         })
     except Exception as e:
         logger.error("Endpoint failed", error=str(e), traceback=traceback.format_exc())
         return JSONResponse({"error": "Something went wrong. Please try again.", "code": "AGENT_ERROR"}, status_code=500)
-
-@app.post('/api/chat/stream')
-@limiter.limit("20/minute")
-async def chat_stream(
-    request: Request,
-    message: str = Form(...),
-    current_user: User = Depends(get_current_user),
-    lat: float = Form(None),
-    lon: float = Form(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """SSE streaming endpoint — yields word-by-word chunks as text/event-stream."""
-    import json as _json
-    from app.services.audio import detect_language_from_text
-    from sqlalchemy import select, desc
-    from app.models.db_models import Conversation as _Conversation
-
-    header_lang = request.headers.get('x-kb-lang')
-    detected_language = header_lang or detect_language_from_text(message)
-
-    # Build conversation history for context
-    messages_ctx = [{"role": "user", "content": message}]
-    user_db_id = current_user.id
-    if user_db_id:
-        try:
-            hist = await db.execute(
-                select(_Conversation)
-                .where(_Conversation.user_id == user_db_id)
-                .order_by(desc(_Conversation.created_at))
-                .limit(5)
-            )
-            previous_convs = list(reversed(hist.scalars().all()))
-            for conv in previous_convs:
-                if conv.transcript:
-                    messages_ctx.insert(0, {"role": "user", "content": conv.transcript})
-                if conv.meta_data and conv.meta_data.get("reply_text"):
-                    messages_ctx.insert(1, {"role": "assistant", "content": conv.meta_data.get("reply_text", "")})
-        except Exception as hist_err:
-            logger.warning("Failed to load history for SSE chat", error=str(hist_err))
-
-    initial_state = {
-        "user_id": current_user.external_id,
-        "gps": {"lat": lat, "lon": lon},
-        "image_path": None,
-        "transcript": message,
-        "language": detected_language,
-        "messages": messages_ctx
-    }
-
-    async def generate():
-        try:
-            # Signal to the client that we are thinking
-            yield f"data: {_json.dumps({'type': 'thinking'})}\n\n"
-
-            from app.crews.krishi_crew import KrishiCrew
-            from crewai import Task
-            from app.agents.bengali_interpreter import bengali_interpreter
-
-            clean_msg = message.lower().strip()
-            greetings = ["hello", "hi", "hey", "হ্যালো", "সালাম", "আসসালামু আলাইকুম", "hi there", "good morning"]
-
-            if clean_msg in greetings:
-                reply_text = "হ্যালো! আমি আপনার কৃষিবন্ধু। আমি কীভাবে সাহায্য করতে পারি? (Hello! I'm your KrishiBondhu. How can I help you today?)"
-            else:
-                route_task = Task(
-                    description=(
-                        f"Process the user's message: {message}. "
-                        "Interpret the intent and delegate to the appropriate expert agent to get the answer. "
-                        "You must provide the final expert advice directly to the user."
-                    ),
-                    expected_output="A detailed, helpful answer in plain Bengali/English text. DO NOT output JSON.",
-                    agent=bengali_interpreter
-                )
-                crew_obj = KrishiCrew()
-                crew = crew_obj.create_crew(tasks=[route_task])
-                result = await asyncio.to_thread(crew.kickoff, inputs=initial_state)
-                reply_text = str(result)
-
-            # Stream reply word-by-word (3 words per chunk)
-            words = reply_text.split(' ')
-            chunk = ''
-            for i, word in enumerate(words):
-                chunk += word + ' '
-                if i % 3 == 0:
-                    yield f"data: {_json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
-                    chunk = ''
-                    await asyncio.sleep(0.05)
-            if chunk:
-                yield f"data: {_json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
-
-            # Persist to DB after full response
-            saved_conv_id = await save_conversation_to_db(
-                db,
-                user_db_id,
-                message,
-                reply_text,
-                metadata={"gps": initial_state["gps"]},
-                external_id=current_user.external_id,
-            )
-
-            try:
-                await MemoryService.extract_and_save_facts(
-                    db,
-                    current_user.external_id,
-                    message,
-                    conv_id=saved_conv_id
-                )
-            except Exception as mem_err:
-                logger.warning("Memory extraction failed in SSE stream", error=str(mem_err))
-
-            yield f"data: {_json.dumps({'type': 'done', 'full_text': reply_text})}\n\n"
-
-        except Exception as e:
-            logger.error("SSE stream error", error=str(e), traceback=traceback.format_exc())
-            yield f"data: {_json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        }
-    )
 
 @app.get('/api/get_tts')
 async def get_tts(path: str):

@@ -1,0 +1,14 @@
+# Never copy host-installed deps or build output into the image build context.
+# The Dockerfile installs deps fresh; a host node_modules (possibly a different
+# OS/arch) would clobber the clean install and break `npm run build`.
+node_modules
+dist
+dev-dist
+
+# Local env / editor / VCS noise
+.env
+.env.*
+.git
+.gitignore
+*.log
+.DS_Store

@@ -9,7 +9,7 @@ Usage
 -----
     from app.core.config import settings
 
-    if settings.is_production and settings.secret_key == settings.DEFAULT_SECRET_KEY:
+    if settings.is_production and settings.using_default_secret:
         ...
 
 Design notes

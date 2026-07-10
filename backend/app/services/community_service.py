@@ -2,8 +2,10 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import load_only
 from typing import Optional, List
 from datetime import datetime, timedelta
+import logging
 import uuid
 
 from app.models.community_models import (
@@ -13,15 +15,58 @@ from app.models.community_models import (
     QuestionUpvote,
     EscalationQueue,
 )
-from app.services.embedding_service import encode_text
 from app.utils.vector_utils import query_vector_similarity
 from app.services.geospatial_service import find_nearest_experts
+
+logger = logging.getLogger(__name__)
 
 # The four crops that get dedicated filter chips. Anything else is bucketed
 # under the "অন্যান্য" (Other) chip on the frontend.
 NAMED_CROPS = ["ধান", "গম", "আলু", "পাট"]
 
 PAGE_SIZE = 20
+
+# Columns we actually read from a CommunityQuestion. We deliberately EXCLUDE
+# `location_geom` (PostGIS Geometry) and `embedding` (pgvector Vector): on the
+# SQLite fallback (HF Space) those columns don't exist, and loading the full
+# entity would make SQLAlchemy emit `AsEWKB(location_geom)` / read `embedding`,
+# raising "no such column". `load_only` keeps queries portable across both DBs.
+_QUESTION_COLUMNS = (
+    CommunityQuestion.id,
+    CommunityQuestion.farmer_id_hashed,
+    CommunityQuestion.question_text,
+    CommunityQuestion.question_text_en,
+    CommunityQuestion.crop_type,
+    CommunityQuestion.growth_stage,
+    CommunityQuestion.district,
+    CommunityQuestion.photo_url,
+    CommunityQuestion.lat,
+    CommunityQuestion.lon,
+    CommunityQuestion.status,
+    CommunityQuestion.moderation_flag,
+    CommunityQuestion.is_archived,
+    CommunityQuestion.admin_review_needed,
+    CommunityQuestion.ai_answer,
+    CommunityQuestion.ai_answer_generated_at,
+    CommunityQuestion.upvotes_count,
+    CommunityQuestion.answers_count,
+    CommunityQuestion.created_at,
+    CommunityQuestion.updated_at,
+)
+
+
+def _safe_encode_text(text: str):
+    """Generate an embedding, degrading gracefully to None if the embedding
+    model can't be loaded (e.g. the torch/torchvision mismatch on the HF Space,
+    where `sentence_transformers` import fails). Semantic search then simply
+    won't be available for that question, but posting/answering still works.
+    """
+    try:
+        from app.services.embedding_service import encode_text
+        return encode_text(text)
+    except Exception as e:
+        logger.warning("Embedding generation unavailable, storing NULL: %s", e)
+        return None
 
 
 def _serialize_question(question: CommunityQuestion, upvoted_by_me: bool = False) -> dict:
@@ -75,7 +120,10 @@ async def create_community_question(
     photo_url: Optional[str] = None,
     district: Optional[str] = None,
 ) -> CommunityQuestion:
-    embedding = encode_text(question_text)
+    # Embedding may be unavailable on environments where the model can't load
+    # (HF Space torch/torchvision mismatch). Degrade to NULL gracefully so the
+    # post is still created — only semantic search is affected.
+    embedding = _safe_encode_text(question_text)
     question = CommunityQuestion(
         farmer_id_hashed=farmer_id_hashed,
         question_text=question_text,
@@ -85,20 +133,45 @@ async def create_community_question(
         photo_url=photo_url,
         lat=lat,
         lon=lon,
-        location_geom=f"POINT({lon} {lat})",
         embedding=embedding,
     )
+    # location_geom is a PostGIS column that doesn't exist on SQLite. Only set
+    # it on PostgreSQL; on SQLite the column is absent (migration 0011 omitted
+    # it) and assigning it would raise "no such column" on the INSERT.
+    if not _is_sqlite(session):
+        question.location_geom = f"POINT({lon} {lat})"
     session.add(question)
     await session.commit()
-    await session.refresh(question)
+    # Reload server-generated fields (created_at/updated_at) without a full
+    # `refresh()`, which would re-SELECT location_geom/embedding (absent on
+    # SQLite). Session has expire_on_commit=False so we re-load explicitly.
+    fresh = await session.execute(
+        select(CommunityQuestion)
+        .options(load_only(CommunityQuestion.created_at, CommunityQuestion.updated_at))
+        .where(CommunityQuestion.id == question.id)
+    )
+    reloaded = fresh.scalars().first()
+    if reloaded is not None:
+        question.created_at = reloaded.created_at
+        question.updated_at = reloaded.updated_at
     return question
 
 
-async def get_recent_questions(session: AsyncSession, limit: int = 20) -> List[dict]:
-    from sqlalchemy import select
+def _is_sqlite(session: AsyncSession) -> bool:
+    """True if this session's underlying dialect is SQLite."""
+    try:
+        bind = session.bind
+        return bind is not None and "sqlite" in bind.dialect.name
+    except Exception:
+        return False
 
+
+async def get_recent_questions(session: AsyncSession, limit: int = 20) -> List[dict]:
     result = await session.execute(
-        select(CommunityQuestion).order_by(CommunityQuestion.created_at.desc()).limit(limit)
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .order_by(CommunityQuestion.created_at.desc())
+        .limit(limit)
     )
     return [_serialize_question(row) for row in result.scalars().all()]
 
@@ -115,7 +188,11 @@ async def list_posts(
 
     Returns {"posts": [...], "page": int, "has_more": bool}.
     """
-    stmt = select(CommunityQuestion).where(CommunityQuestion.is_archived.is_(False))
+    stmt = (
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .where(CommunityQuestion.is_archived.is_(False))
+    )
 
     if district:
         stmt = stmt.where(CommunityQuestion.district == district)
@@ -166,7 +243,9 @@ async def _did_upvote(session: AsyncSession, question_id, viewer_id: Optional[st
 async def get_post_detail(session: AsyncSession, post_id: str, viewer_id: Optional[str] = None) -> Optional[dict]:
     """Single post + AI answer + human answers + viewer's upvote state."""
     result = await session.execute(
-        select(CommunityQuestion).where(CommunityQuestion.id == post_id)
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .where(CommunityQuestion.id == post_id)
     )
     question = result.scalars().first()
     if not question:
@@ -186,7 +265,9 @@ async def get_post_detail(session: AsyncSession, post_id: str, viewer_id: Option
 async def toggle_question_upvote(session: AsyncSession, post_id: str, farmer_id_hashed: str) -> dict:
     """Toggle a post upvote. Returns {"upvoted": bool, "upvotes_count": int}."""
     result = await session.execute(
-        select(CommunityQuestion).where(CommunityQuestion.id == post_id)
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .where(CommunityQuestion.id == post_id)
     )
     question = result.scalars().first()
     if not question:
@@ -232,7 +313,9 @@ async def add_answer(
     session.add(answer)
     # Keep the denormalized answers_count in sync.
     q_result = await session.execute(
-        select(CommunityQuestion).where(CommunityQuestion.id == question_id)
+        select(CommunityQuestion)
+        .options(load_only(CommunityQuestion.id, CommunityQuestion.answers_count, CommunityQuestion.status))
+        .where(CommunityQuestion.id == question_id)
     )
     question = q_result.scalars().first()
     if question:
@@ -271,7 +354,9 @@ async def can_generate_ai_answer(session: AsyncSession, post_id: str) -> tuple:
 async def save_ai_answer(session: AsyncSession, post_id: str, ai_answer: str) -> Optional[dict]:
     """Persist a freshly generated AI answer and return the updated serialization."""
     result = await session.execute(
-        select(CommunityQuestion).where(CommunityQuestion.id == post_id)
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .where(CommunityQuestion.id == post_id)
     )
     question = result.scalars().first()
     if not question:
@@ -281,15 +366,18 @@ async def save_ai_answer(session: AsyncSession, post_id: str, ai_answer: str) ->
     if question.status == "pending":
         question.status = "answered"
     await session.commit()
-    await session.refresh(question)
+    # expire the instance so the serializer reads committed values, but don't
+    # `refresh()` (which would re-SELECT every column incl. the absent
+    # location_geom on SQLite).
+    session.expire(question, attribute_names=["ai_answer", "ai_answer_generated_at", "status"])
     return _serialize_question(question)
 
 
 async def get_question_by_id(session: AsyncSession, question_id: str) -> Optional[dict]:
-    from sqlalchemy import select
-
     result = await session.execute(
-        select(CommunityQuestion).where(CommunityQuestion.id == question_id)
+        select(CommunityQuestion)
+        .options(load_only(*_QUESTION_COLUMNS))
+        .where(CommunityQuestion.id == question_id)
     )
     question = result.scalars().first()
     return _serialize_question(question) if question else None

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Application secrets & JWT config
 # ---------------------------------------------------------------------------
-from app.core.config import settings, DEFAULT_SECRET_KEY
+from app.core.config import settings
 
 SECRET_KEY = settings.secret_key
 
