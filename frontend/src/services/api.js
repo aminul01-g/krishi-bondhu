@@ -293,6 +293,18 @@ export const getSubsidies = (crop, landSize, signal) => {
   return request('GET', `/api/finance/subsidies?${params.toString()}`, { signal });
 };
 
+export const postSimulatePayout = (crop, landSize, scenario = 'drought', severity = 0.5, regionRisk = 'moderate') =>
+  request('POST', '/api/finance/simulate-payout', {
+    body: { crop, land_size: landSize, scenario, severity, region_risk: regionRisk },
+  });
+
+export const getSubsidies = (crop, landSize, signal) => {
+  const params = new URLSearchParams();
+  if (crop) params.set('crop', crop);
+  params.set('land_size', landSize || 0);
+  return request('GET', `/api/finance/subsidies?${params.toString()}`, { signal });
+};
+
 // --- Community ---
 // Legacy /questions surface (kept for backward compatibility)
 export const postCommunityQuestion = (data) =>

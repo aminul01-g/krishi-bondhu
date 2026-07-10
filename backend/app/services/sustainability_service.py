@@ -226,6 +226,7 @@ async def verify_sustainable_practices(db: AsyncSession, user_id: str) -> List[D
     stmt = select(FarmDiary).where(FarmDiary.user_id == user_id)
     result = await db.execute(stmt)
     entries = result.scalars().all()
+    all_notes = " ".join([(e.notes or "") for e in entries if e.notes]).lower()
 
     # practice -> (confidence, evidence)
     found: Dict[str, Any] = {}

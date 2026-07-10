@@ -22,6 +22,8 @@ from geoalchemy2.elements import WKTElement
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 # The four crops that get dedicated filter chips. Anything else is bucketed
 # under the "অন্যান্য" (Other) chip on the frontend.
 NAMED_CROPS = ["ধান", "গম", "আলু", "পাট"]
