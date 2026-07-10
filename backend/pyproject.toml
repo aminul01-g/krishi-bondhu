@@ -38,7 +38,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "redis>=5.2.1",
     "prophet>=1.1.5",
-    "structlog>=25.5.0",
     # Audio/Misc
     "gtts>=2.5.0",
     "cachetools>=5.3.2",
@@ -54,9 +53,18 @@ dependencies = [
     "pytesseract>=0.3.10",
     "numpy>=1.26.0",
     "opencv-python-headless>=4.9.0",
-    "slowapi>=0.1.10",
     "python-jose[cryptography]>=3.5.0",
     "passlib[bcrypt]>=1.7.4",
+]
+
+# OPTIONAL dependencies. The app still imports, collects, and runs without
+# these — rate limiting (slowapi) and structured logging (structlog) degrade
+# gracefully to no-ops. Install them explicitly when you want those features:
+#   pip install ".[optional]"
+[project.optional-dependencies]
+optional = [
+    "slowapi>=0.1.10",
+    "structlog>=25.5.0",
 ]
 
 [tool.pytest.ini_options]

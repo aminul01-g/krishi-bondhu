@@ -2,15 +2,14 @@ import os
 import logging
 import pandas as pd
 import json
-import random
 import pickle
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from redis import Redis
-from prophet import Prophet
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.db_models import MarketPrice
+from app.services.market_provider import get_provider, fetch_dam_prices
 
 logger = logging.getLogger("MarketService")
 
@@ -33,7 +32,7 @@ class MarketService:
     def normalize_crop(crop: str) -> str:
         return str(crop).strip().lower() if crop else ""
 
-    def _load_model(self, crop: str) -> Optional[Prophet]:
+    def _load_model(self, crop: str) -> Optional[Any]:
         """Loads a pre-trained Prophet model from disk or cache."""
         crop = self.normalize_crop(crop)
         if crop in self._model_cache:
@@ -41,6 +40,7 @@ class MarketService:
 
         model_path = os.path.join(self.models_dir, f"market_{crop}.pkl")
         if os.path.exists(model_path):
+            from prophet import Prophet  # lazy import; only reached when a model exists
             try:
                 with open(model_path, 'rb') as f:
                     model = pickle.load(f)
@@ -50,9 +50,73 @@ class MarketService:
                 logger.error(f"Failed to load model for {crop}: {e}")
         return None
 
+    def _prophet_forecast(
+        self, crop: str, history: List[Dict[str, Any]], periods: int = 7
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Fit + predict a fresh Prophet model on a [{date, price}] history.
+
+        Returns the 7-day forecast list [{date, price, low, high}] or None if
+        Prophet is unavailable or fitting fails — callers fall back to the
+        calibrated seasonal model. Prophet (and pandas) are imported lazily.
+        """
+        try:
+            from prophet import Prophet  # lazy: only when a real history exists
+            import pandas as pd
+        except Exception as e:
+            logger.warning(f"Prophet unavailable for on-the-fly forecast ({crop}): {e}")
+            return None
+        try:
+            df = pd.DataFrame(history).rename(columns={"date": "ds", "price": "y"})
+            df["ds"] = pd.to_datetime(df["ds"])
+            model = Prophet(
+                yearly_seasonality=True,
+                weekly_seasonality=True,
+                daily_seasonality=False,
+                changepoint_prior_scale=0.05,
+            )
+            model.fit(df)
+            future = model.make_future_dataframe(periods=periods)
+            forecast = model.predict(future).iloc[-periods:]
+            return [
+                {
+                    "date": row["ds"].strftime("%Y-%m-%d"),
+                    "price": round(float(row["yhat"]), 2),
+                    "low": round(float(row["yhat_lower"]), 2),
+                    "high": round(float(row["yhat_upper"]), 2),
+                }
+                for _, row in forecast.iterrows()
+            ]
+        except Exception as e:
+            logger.error(f"On-the-fly Prophet forecast failed for {crop}: {e}")
+            return None
+
+    def _forecast_from_history(
+        self,
+        crop: str,
+        provider: Any,
+        live_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> tuple:
+        """Forecast helper for get_current_prices.
+
+        Prefers a Prophet model fit on live DAM history (when Prophet is present
+        and the history is usable); otherwise returns the calibrated seasonal
+        forecast. Always returns (fcast_list, predicted_price).
+        """
+        if live_history and len(live_history) >= 2:
+            fcast = self._prophet_forecast(crop, live_history, periods=7)
+            if fcast:
+                return fcast, fcast[-1]["price"]
+            # Prophet unavailable/failed -> seasonal band, flagged accordingly.
+            _, fcast, predicted_price = provider.forecast(crop, days=7)
+            return fcast, predicted_price
+        _, fcast, predicted_price = provider.forecast(crop, days=7)
+        return fcast, predicted_price
+
     async def get_current_prices(self, crop: str, lat: Optional[float] = None, lon: Optional[float] = None) -> Dict[str, Any]:
         """
-        Fetches current wholesale prices. Implements Redis caching.
+        Fetches current wholesale prices with real mandi distances and honest
+        provenance. Uses a live DAM feed when configured, otherwise a calibrated
+        seasonal simulation (clearly flagged `simulated`).
         """
         crop = self.normalize_crop(crop)
         if not crop or crop == "none":
@@ -69,29 +133,42 @@ class MarketService:
             except Exception as e:
                 logger.warning(f"Redis read failed: {e}")
 
-        # 2. Simulation logic (Real API integration point)
-        mandis = ["Karwan Bazar, Dhaka", "Shyam Bazar, Dhaka", "Rajshahi Sadar Mandi", "Khulna Boro Bazar", "Bogura Mohasthan Hat"]
-        base_prices = {
-            "potato": 45, "onion": 80, "rice": 65, "tomato": 120,
-            "brinjal": 60, "cabbage": 35, "chili": 150
-        }
-        base_price = base_prices.get(crop, 60.0)
+        # 2. Real feed (if reachable) else calibrated simulation
+        provider = get_provider()
+        live = fetch_dam_prices(crop)
 
-        current_prices = []
-        for mandi in mandis:
-            variation = random.uniform(0.9, 1.1)
-            current_prices.append({
-                "mandi": mandi,
-                "price_bdt_per_kg": round(base_price * variation, 2),
-                "distance_km": random.randint(5, 150)
-            })
-
-        current_prices.sort(key=lambda x: x["price_bdt_per_kg"], reverse=True)
+        if live:
+            current_price = live["current_price"]
+            mandis = live.get("current_prices") or provider.nearby_mandis(crop, lat, lon)
+            # Forecast on real history when Prophet is available; otherwise a
+            # calibrated seasonal band (clearly flagged in `confidence`).
+            fcast, predicted_price = self._forecast_from_history(
+                crop, provider, live_history=live.get("price_history")
+            )
+            source = "live_dam"
+            simulated = False
+            confidence_note = live["confidence"]
+            provenance = "live_dam"
+        else:
+            current_price = provider.current_price(crop)
+            mandis = provider.nearby_mandis(crop, lat, lon)
+            _, fcast, predicted_price = provider.forecast(crop, days=7)
+            source = provider.source
+            simulated = provider.simulated
+            confidence_note = getattr(provider, "confidence_note", None)
+            provenance = "simulated"
 
         result = {
             "crop": crop,
-            "current_prices": current_prices,
-            "timestamp": datetime.now().isoformat()
+            "current_price": current_price,
+            "predicted_price": predicted_price,
+            "current_prices": mandis,
+            "price_forecast": fcast,
+            "source": source,
+            "simulated": simulated,
+            "confidence_note": confidence_note,
+            "provenance": provenance,
+            "timestamp": datetime.now().isoformat(),
         }
 
         # 3. Cache results for 1 hour
@@ -105,81 +182,72 @@ class MarketService:
 
     async def predict_price_trend(self, crop: str, session: AsyncSession) -> Dict[str, Any]:
         """
-        Uses pre-trained Prophet models for price forecasting.
-        Returns price_history (last 14 days), price_forecast (next 7 days),
-        trend_direction, and trend_percent for the frontend chart.
+        Price trend forecast. Uses a pre-trained Prophet model when one exists
+        (trained on real history if supplied, else on simulated history — always
+        flagged `simulated` unless a real export was used), and falls back to the
+        calibrated seasonal forecast with uncertainty bands.
         """
         crop = self.normalize_crop(crop)
+        provider = get_provider()
         model = self._load_model(crop)
 
-        # Fetch latest price from DB as starting point for forecast
-        stmt = select(MarketPrice).where(MarketPrice.crop == crop).order_by(desc(MarketPrice.timestamp)).limit(1)
-        result = await session.execute(stmt)
-        latest_entry = result.scalars().first()
-
-        # Base prices for known crops (BDT/kg, approximate Bangladesh wholesale)
-        crop_base_prices = {
-            "ধান": 28, "গম": 35, "ভুট্টা": 30, "আলু": 22, "পেঁয়াজ": 55,
-            "রসুন": 120, "মরিচ": 200, "টমেটো": 40, "বেগুন": 35, "পাট": 45,
-            "rice": 65, "wheat": 45, "potato": 22, "onion": 55, "tomato": 40,
-            "brinjal": 35, "chili": 200, "jute": 45,
-        }
-        current_price = (latest_entry.price_bdt_per_kg if latest_entry
-                         else crop_base_prices.get(crop, 60.0))
+        # Latest price from DB (if any real history exists) anchors the trend.
+        current_price = provider.current_price(crop)
+        try:
+            stmt = select(MarketPrice).where(MarketPrice.crop == crop).order_by(desc(MarketPrice.timestamp)).limit(1)
+            res = await session.execute(stmt)
+            latest = res.scalars().first()
+            if latest:
+                current_price = latest.price_bdt_per_kg
+        except Exception:
+            pass
 
         predicted_price = current_price
         confidence = "Low (Heuristic Fallback)"
+        provenance = "simulated"
         prophet_used = False
+        # Defaults: calibrated seasonal model (always safe to fall back to).
+        history, fcast, _ = provider.forecast(crop, days=7)
 
         if model:
+            from prophet import Prophet  # lazy import; only reached when a model exists
             try:
                 future = model.make_future_dataframe(periods=7)
                 forecast = model.predict(future)
                 predicted_price = float(forecast['yhat'].iloc[-1])
-                confidence = "High (Pre-trained Prophet Model)"
+                confidence = "Prophet model (trained on simulated history)"
                 prophet_used = True
             except Exception as e:
                 logger.error(f"Prophet prediction failed for {crop}: {e}")
 
         if not prophet_used:
-            # Realistic seasonal heuristic: slight upward noise
-            seasonal_factor = random.uniform(0.97, 1.08)
-            predicted_price = round(current_price * seasonal_factor, 2)
+            # Prefer live DAM history for a robust Prophet forecast; fall back to
+            # the calibrated seasonal forecast when DAM/Prophet are unavailable.
+            live = fetch_dam_prices(crop)
+            if live and len(live.get("price_history", [])) >= 2:
+                history = live["price_history"]
+                pf = self._prophet_forecast(crop, live["price_history"], periods=7)
+                if pf:
+                    fcast = pf
+                    predicted_price = fcast[-1]["price"]
+                    confidence = "Live DAM wholesale feed (Prophet forecast on real history)"
+                else:
+                    _, fcast, predicted_price = provider.forecast(crop, days=7)
+                    confidence = (
+                        "Live DAM wholesale prices; 7-day forecast from calibrated "
+                        "seasonal model (Prophet unavailable)"
+                    )
+                provenance = "live_dam"
 
         # Classify trend
         if predicted_price > current_price * 1.05:
-            trend = "Uptrend"
-            trend_direction = "up"
+            trend, trend_direction = "Uptrend", "up"
         elif predicted_price < current_price * 0.98:
-            trend = "Downtrend"
-            trend_direction = "down"
+            trend, trend_direction = "Downtrend", "down"
         else:
-            trend = "Stable"
-            trend_direction = "flat"
+            trend, trend_direction = "Stable", "flat"
 
         trend_percent = round(((predicted_price - current_price) / current_price) * 100, 2) if current_price else 0.0
-
-        today = datetime.now()
-
-        def _synthetic_series(start_date: datetime, start_price: float, end_price: float, days: int) -> List[Dict]:
-            """Generate a realistic daily price series with small noise."""
-            series = []
-            for i in range(days):
-                t = i / max(days - 1, 1)
-                interpolated = start_price + (end_price - start_price) * t
-                noise = random.uniform(-start_price * 0.015, start_price * 0.015)
-                series.append({
-                    "date": (start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
-                    "price": round(max(interpolated + noise, 1.0), 2)
-                })
-            return series
-
-        # History: 14 days ending at today
-        historical_start = current_price * random.uniform(0.88, 1.05)
-        price_history = _synthetic_series(today - timedelta(days=13), historical_start, current_price, 14)
-
-        # Forecast: 7 days starting from tomorrow
-        price_forecast = _synthetic_series(today + timedelta(days=1), current_price, predicted_price, 7)
 
         return {
             "current_avg": round(current_price, 2),
@@ -188,8 +256,11 @@ class MarketService:
             "trend_direction": trend_direction,
             "trend_percent": trend_percent,
             "confidence": confidence,
-            "price_history": price_history,
-            "price_forecast": price_forecast,
+            "source": "live_dam" if provenance == "live_dam" else provider.source,
+            "simulated": provenance != "live_dam",
+            "provenance": provenance,
+            "price_history": history,
+            "price_forecast": fcast,
         }
 
     async def save_prices_to_db(self, session: AsyncSession, data: Dict[str, Any]) -> None:

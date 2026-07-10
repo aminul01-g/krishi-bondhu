@@ -5,6 +5,11 @@ pydantic==2.13.3
 pydantic-settings==2.14.0
 python-multipart==0.0.27
 httpx==0.28.1
+# OPTIONAL: slowapi / structlog are NOT hard requirements. The app degrades
+# gracefully (rate limiting + structured logging become no-ops) when they are
+# absent, so a minimal/offline install can omit them. They are also exposed as
+# the `optional` extra in pyproject.toml. Keep them here for full-feature
+# installs but treat them as optional.
 slowapi>=0.1.9
 
 # Database & Async
@@ -66,6 +71,8 @@ fpdf2==2.11.0
 langdetect==1.0.9
 beautifulsoup4==4.14.3
 python-dotenv==1.0.0
+# OPTIONAL — see note above on slowapi. Structured logging becomes stdlib
+# logging when structlog is not installed.
 structlog==25.5.0
 
 # Testing
